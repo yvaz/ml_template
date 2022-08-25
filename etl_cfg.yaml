@@ -1,0 +1,13 @@
+input: 
+  features.py: gen_feats
+drop:
+  - petal width (cm)
+train_flow: 
+  n_samples: 200000
+  class_balance: 
+    imblearn.under_sampling: ClusterCentroids
+score_flow:
+  method:
+    ParallelScore:
+      n_folds: 10
+

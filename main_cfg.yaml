@@ -1,0 +1,12 @@
+labeled: True
+train_flow:
+  - ETLPipe
+  - PrepPipe
+  - TrainPipe
+score_flow:
+  - ETLPipe
+  - PrepPipe
+  - ScorePipe
+evaluation_flow:
+  - EvalETLPipe
+  - EvalPipe
