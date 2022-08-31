@@ -1,0 +1,39 @@
+categories:
+  - var1
+categorical:
+  steps:
+  - missing_values_category:
+    package: sklearn.impute
+    module: SimpleImputer
+    params:
+      missing_values: np.nan
+      strategy: most_frequent
+  - target_encoder:
+    package: sklearn.preprocessing
+    module: OneHotEncoder
+numerical:
+  steps:
+  - missing_values_numeric:
+    package: sklearn.impute
+    module: SimpleImputer
+    params:
+      missing_values: np.nan
+      strategy: mean
+final:
+  steps:
+    - dim_reduction:
+      package: boruta
+      module: BorutaPy
+      params:
+        estimator:
+          package: lightgbm
+          module: LGBMClassifier
+          params:
+            boosting_type: gbdt
+            n_estimators: 20
+            max_depth: 5
+            n_jobs: 8
+        verbose: 2
+        alpha: 0.01
+        perc: 70
+        max_iter: 100
