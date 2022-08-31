@@ -25,7 +25,7 @@ tuning:
     max_depth: [3,4,5,6,7,8,9,10]
 calibration:
   method: sigmoid
-  cv: 10
-  cal_sample_rate: 0.7
+  cv: prefit
+  cal_sample_rate: 0.33
 report: True
 

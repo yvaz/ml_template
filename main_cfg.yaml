@@ -1,10 +1,10 @@
+model_name: ml_template_test
 labeled: True
+train_test_sample: 0.33
 train_flow:
-  - ETLPipe
   - PrepPipe
   - TrainPipe
 score_flow:
-  - ETLPipe
   - PrepPipe
   - ScorePipe
 evaluation_flow:

@@ -94,11 +94,9 @@ class TrainPipe(BaseEstimator, TransformerMixin):
         mod = getattr(pack,self.config['train']['module'])
         self.clf = mod
 
-        train_X, train_y = X, y
-
         if self.calibration:
             
-            train_X, cal_X, train_y, cal_y = train_test_split(train_X, train_y, 
+            train_X, cal_X, train_y, cal_y = train_test_split(X, y, 
                                                                 test_size=self.cal_sample_rate,
                                                                 random_state=42)
             self.cal_method = self.config['calibration']['method']
