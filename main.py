@@ -44,11 +44,10 @@ def score(model_name,safra):
 
 def main(argv):
 
-    safra = 202204
-
     args = argv[1:]
     config = args[0]
     is_train = args[1]
+    safra = int(args[2])
 
     with open(config,'r') as fp:
         config = yaml.load(fp, Loader = SafeLoader)

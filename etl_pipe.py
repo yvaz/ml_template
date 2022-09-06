@@ -17,7 +17,9 @@ class ETLPipe(BaseEstimator, TransformerMixin):
 
         with open(config,'r') as fp:
             self.config = yaml.load(fp, Loader = SafeLoader)
-        
+    
+
+        self.key = self.config['key']
         self.train_flow = train_flow
         self.labeled = labeled
 
@@ -30,7 +32,11 @@ class ETLPipe(BaseEstimator, TransformerMixin):
             self.class_blce_met = self.config['train_flow']['class_balance'][self.class_blce_mod]
 
         self.score_method = self.config['score_flow']['method']
-        self.drop = self.config['drop']
+        
+        if 'drop'in self.config.keys():
+            self.drop = self.config['drop']
+        else:
+            self.drop = None
 
         self.pub_mod = list(self.config['pub'].keys())[0]
         self.pub_met = self.config['pub'][self.pub_mod]
@@ -71,15 +77,16 @@ class ETLPipe(BaseEstimator, TransformerMixin):
             target = self.targets(self.safra+1)
             pub = self.pubs(self.safra)
 
-            features = features.drop(self.drop, axis=1)
+            if self.drop:
+                features = features.drop(self.drop, axis=1)
 
-            master = pub.merge(features,how='left',on='user_id')\
-                            .merge(target,how='left',on='user_id')
+            master = pub.merge(features,how='left',on=self.key)\
+                            .merge(target,how='left',on=self.key)
 
             master['target'] = master['target'].fillna(0)
 
             master = master.sample(self.n_samples)
-            master = master.drop('user_id', axis=1)
+            master = master.drop(self.key, axis=1)
 
             X = master.loc[:,master.columns != 'target']
             y = master['target']
@@ -96,7 +103,8 @@ class ETLPipe(BaseEstimator, TransformerMixin):
             features = self.features(self.safra)
             pub = self.pub(self.safra)
 
-            features.drop(self.drop, axis=1)
+            if self.drop:
+                features.drop(self.drop, axis=1)
 
             master = pub.merge(features,how='left',on='user_id')
 

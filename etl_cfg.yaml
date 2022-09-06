@@ -1,13 +1,12 @@
+key: CUS_CUST_ID
 pub: 
   pub_alvo.py: gen_pub
 target:
   target.py: gen_target
 features:
   features.py: gen_features
-drop:
-  - worst fractal dimension
 train_flow: 
-  n_samples: 500
+  n_samples: 200000
   class_balance: 
     imblearn.under_sampling: RandomUnderSampler
 target_advance: 1

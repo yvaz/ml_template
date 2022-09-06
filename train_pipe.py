@@ -63,7 +63,7 @@ class TrainPipe(BaseEstimator, TransformerMixin):
 
             model = self.clf(**tuning_aux)
             model.fit(train_X,train_y)
-            preds = model.predict(test_X)
+            preds = model.predict_proba(test_X)[:,1]
             metric = self.tuning_metric(test_y,preds)
             
             return metric
