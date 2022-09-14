@@ -4,6 +4,9 @@ import yaml
 from yaml.loader import SafeLoader
 import importlib
 import imp
+import pyarrow as pa
+import pyarrow.parquet as pq
+import pandas as pd
 
 class ETLPipe(BaseEstimator, TransformerMixin):
 
@@ -11,7 +14,8 @@ class ETLPipe(BaseEstimator, TransformerMixin):
                  safra: int,
                  config: str = "etl_cfg.yaml", 
                  train_flow: bool = True,
-                 labeled: bool = True):
+                 labeled: bool = True,
+                 persist=True):
 
         self.safra = safra
 
@@ -24,8 +28,10 @@ class ETLPipe(BaseEstimator, TransformerMixin):
         self.labeled = labeled
 
         self.n_samples = self.config['train_flow']['n_samples']
+            
         self.target_advance = self.config['target_advance']
-        self.imbalanced = (self.config['train_flow']['class_balance'] != None)
+        self.persist = persist
+        self.imbalanced = 'class_balance' in self.config['train_flow'].keys()
 
         if self.imbalanced:
             self.class_blce_mod = list(self.config['train_flow']['class_balance'].keys())[0]
@@ -80,12 +86,17 @@ class ETLPipe(BaseEstimator, TransformerMixin):
             if self.drop:
                 features = features.drop(self.drop, axis=1)
 
+            print(pub.columns)
+            print(features.columns)
+            print(target.columns)
             master = pub.merge(features,how='left',on=self.key)\
                             .merge(target,how='left',on=self.key)
 
             master['target'] = master['target'].fillna(0)
 
-            master = master.sample(self.n_samples)
+            if self.n_samples != 'None':
+                master = master.sample(self.n_samples)
+                
             master = master.drop(self.key, axis=1)
 
             X = master.loc[:,master.columns != 'target']
@@ -97,6 +108,16 @@ class ETLPipe(BaseEstimator, TransformerMixin):
             else:
                 df_X = X
                 df_y = y
+                
+            print("LABEL RATIO")
+            print(sum(df_y)/len(df_y))
+            print("DF SIZE")
+            print(df_X.shape)
+
+            if self.persist:
+                table = pa.Table.from_pandas(pd.concat([df_X,df_y],axis=1))
+                pq.write_table(table, 'dataset.parquet')
+            
             return df_X, df_y
 
         else:
@@ -109,6 +130,10 @@ class ETLPipe(BaseEstimator, TransformerMixin):
             master = pub.merge(features,how='left',on='user_id')
 
             master = master.sample(n_sample)
+            
+            if self.persist:
+                table = pa.Table.from_pandas(master)
+                pq.write_table(table, 'dataset.parquet')
 
             return master
 
@@ -124,5 +149,5 @@ class ETLPipe(BaseEstimator, TransformerMixin):
 
         else:
 
-           return self._transform_score()
+            return self._transform_score()
 

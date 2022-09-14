@@ -6,9 +6,7 @@ target:
 features:
   features.py: gen_features
 train_flow: 
-  n_samples: 200000
-  class_balance: 
-    imblearn.under_sampling: RandomUnderSampler
+  n_samples: None
 target_advance: 1
 score_flow:
   method:

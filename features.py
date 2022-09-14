@@ -592,13 +592,10 @@ def gen_features(safra):
         )
         SELECT
             CA.CUS_CUST_ID AS CUS_CUST_ID,
-            CAD.CUS_RU_SINCE_DT AS DATA_CADASTRO,
             CC.SEGMENT AS CLUSTER,
             STAGE_LIFECYCLE AS CICLO_DE_VIDA,
             CATEGORY_PRINC AS PRINCIPALIDADE,
             CAST(LYL.LYL_LEVEL_NUMBER AS INT64) AS LOYALTY_LVL,
-            GEO.GEO_LAT AS LATITUDE,
-            GEO.GEO_LONG AS LONGITUDE,
             CASE
                 WHEN CO.cus_cust_id IS NULL THEN 'N'
                 ELSE 'S'
@@ -670,20 +667,8 @@ def gen_features(safra):
             CAST(M90.TPV_TRANSFERENCIAS_DIFFTIT AS FLOAT64) AS TPV_TRANSFERENCIAS_DIFFTIT90,
             CAST(M90.TPV_TRANSFERENCIAS_MSMTIT AS FLOAT64) AS TPV_TRANSFERENCIAS_MSMTIT90,
             CAST(M90.TPV_SAQUES AS FLOAT64) AS TPV_SAQUES90,
-            COALESCE(
-                P30.MIN_NOT_DATE_SHOWN,
-                P60.MIN_NOT_DATE_SHOWN,
-                P90.MIN_NOT_DATE_SHOWN
-            ) AS LAST_DT_SHOWN,
-            COALESCE(
-                P30.MIN_NOT_DATE_OPEN,
-                P60.MIN_NOT_DATE_OPEN,
-                P90.MIN_NOT_DATE_OPEN
-            ) AS LAST_DT_OPEN,
             POPF.NR_SHOWNS_OPF AS SHOWNS_OPF,
             POPF.NR_OPENS_OPF AS OPENS_OPF,
-            POPF.MIN_NOT_DATE_SHOWN AS DT_LAST_SHOWN_OPF,
-            POPF.MIN_NOT_DATE_OPEN AS DT_LAST_OPEN_OPF,
             P30.NR_SHOWNS AS SHOWNS_30,
             P30.NR_OPENS AS OPENS_30,
             P60.NR_SHOWNS AS SHOWNS_60,

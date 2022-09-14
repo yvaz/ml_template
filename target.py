@@ -141,9 +141,9 @@ def gen_target(safra):
                     FROM
                         WHOWNER.BT_MP_SALDOS_SITE
                     WHERE
-                        TIM_DAY BETWEEN DATE_TRUNC(DATE_SUB(current_date, INTERVAL 1 MONTH), MONTH)
+                        TIM_DAY BETWEEN DATE_TRUNC(DATE_SUB('{safra}', INTERVAL 1 MONTH), MONTH)
                         AND LAST_DAY(
-                            DATE_TRUNC(DATE_SUB(current_date, INTERVAL 1 MONTH), MONTH),
+                            DATE_TRUNC(DATE_SUB('{safra}', INTERVAL 1 MONTH), MONTH),
                             MONTH
                         )
                     GROUP BY

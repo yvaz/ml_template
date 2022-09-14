@@ -1,6 +1,6 @@
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
-from sklearn.pipeline import Pipeline
+from imblearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 import yaml
 from yaml.loader import SafeLoader
@@ -24,6 +24,8 @@ class PrepPipe(BaseEstimator, TransformerMixin):
         mod_list = []  
 
         for step in steps:
+                
+            print(step)
 
             step_name = list(step.keys())[0]
             pack = importlib.import_module(step['package'])
@@ -31,6 +33,8 @@ class PrepPipe(BaseEstimator, TransformerMixin):
 
             if 'params' in step:
                 params = step['params']
+                print(params)
+                print(mod)
                 eval_p =  set(params).intersection(self.eval_params)
             
                 for p in eval_p:
@@ -76,6 +80,8 @@ class PrepPipe(BaseEstimator, TransformerMixin):
                         ]
         )
 
+        X[nums] = X[nums].astype(float)
+        
         self.pipe = Pipeline([('preproc',col_transformer),('final',final_pipe)])
         self.pipe.fit(X,y)
 

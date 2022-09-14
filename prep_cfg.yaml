@@ -1,5 +1,9 @@
 categories:
-  - var1
+  - CLUSTER
+  - PRINCIPALIDADE
+  - FLAG_DATA_OUT
+  - CICLO_DE_VIDA
+  - FLAG_CARTAO_CREDITO
 categorical:
   steps:
   - missing_values_category:
@@ -7,10 +11,11 @@ categorical:
     module: SimpleImputer
     params:
       missing_values: np.nan
-      strategy: most_frequent
-  - target_encoder:
-    package: sklearn.preprocessing
-    module: OneHotEncoder
+      strategy: constant
+      fill_value: missing
+  - encoder:
+    package: category_encoders
+    module: TargetEncoder
 numerical:
   steps:
   - missing_values_numeric:
@@ -18,22 +23,15 @@ numerical:
     module: SimpleImputer
     params:
       missing_values: np.nan
-      strategy: mean
+      strategy: constant
+      fill_value: 0
+  - normalization:
+    package: sklearn.preprocessing
+    module: MinMaxScaler
 final:
   steps:
     - dim_reduction:
-      package: boruta
-      module: BorutaPy
+      package: sklearn.feature_selection
+      module: VarianceThreshold
       params:
-        estimator:
-          package: lightgbm
-          module: LGBMClassifier
-          params:
-            boosting_type: gbdt
-            n_estimators: 20
-            max_depth: 5
-            n_jobs: 8
-        verbose: 2
-        alpha: 0.01
-        perc: 70
-        max_iter: 100
+        threshold: 0.0001

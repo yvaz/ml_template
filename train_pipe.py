@@ -12,10 +12,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 from sklearn.calibration import calibration_curve
 from sklearn.calibration import CalibratedClassifierCV
+from imblearn.under_sampling import RandomUnderSampler
+from imblearn.over_sampling import SMOTE
 import matplotlib.pyplot as plt
 import csv
 import pandas as pd
 from plots_collection import calibration_plot
+from simple_calibration import SimpleCalibration
 
 class TrainPipe(BaseEstimator, TransformerMixin):
 
@@ -30,11 +33,18 @@ class TrainPipe(BaseEstimator, TransformerMixin):
             self.config = yaml.load(fp, Loader = SafeLoader)
 
         self.test_sample_rate = self.config['test_sample_rate']
-        self.cal_sample_rate = self.config['calibration']['cal_sample_rate']
-        self.tuning_sample = self.config['tuning']['sample_rate']
         self.rpt = self.config['report']
         self.calibration = 'calibration' in self.config.keys()
+        self.optimize_threshold = 'optimize_threshold' in self.config
+        
+        if self.calibration:
+            self.cal_sample_rate = self.config['calibration']['cal_sample_rate']
+        
         self.tuning = 'tuning' in self.config.keys()
+        
+        if self.tuning:
+            self.tuning_sample = self.config['tuning']['sample_rate']
+            self.tuning_pred = self.config['tuning']['pred_tuning']
 
 
 
@@ -63,7 +73,14 @@ class TrainPipe(BaseEstimator, TransformerMixin):
 
             model = self.clf(**tuning_aux)
             model.fit(train_X,train_y)
-            preds = model.predict_proba(test_X)[:,1]
+            
+            f_pred = getattr(model,self.tuning_pred)
+            
+            if self.tuning_pred == 'predict_proba':
+                preds = f_pred(test_X)[:,1]
+            else:
+                preds = f_pred(test_X)
+                
             metric = self.tuning_metric(test_y,preds)
             
             return metric
@@ -74,6 +91,7 @@ class TrainPipe(BaseEstimator, TransformerMixin):
         self.tuning_cfg.pop('direction')
         self.tuning_cfg.pop('n_trials')
         self.tuning_cfg.pop('sample_rate')
+        self.tuning_cfg.pop('pred_tuning')
 
         if 'package' in self.tuning_cfg['tuning_metric'].keys():
 
@@ -89,11 +107,14 @@ class TrainPipe(BaseEstimator, TransformerMixin):
             
 
     def fit(self, X, y = None):
-      
+        
         pack = importlib.import_module(self.config['train']['package'])
         mod = getattr(pack,self.config['train']['module'])
         self.clf = mod
 
+        train_X = X
+        train_y = y
+        
         if self.calibration:
             
             train_X, cal_X, train_y, cal_y = train_test_split(X, y, 
@@ -101,7 +122,11 @@ class TrainPipe(BaseEstimator, TransformerMixin):
                                                                 random_state=42)
             self.cal_method = self.config['calibration']['method']
 
-
+        print("INICIALIZANDO TREINAMENTO COM UM DATASET DE TAMANHO {shape}".format(shape=X.shape))
+        print("QUANTIDADE DE TARGETS: {targets}".format(targets=sum(y == 1)))
+        print("QUANTIDADE DE N TARGETS: {n_targets}".format(n_targets=sum(y == 0)))
+        print("TAXA TARGET {t_target}".format(t_target=sum(y == 1)/len(y))) 
+        
         if self.tuning:
         
             best_trial_params = self._tuning_train(train_X, train_y)
@@ -114,14 +139,23 @@ class TrainPipe(BaseEstimator, TransformerMixin):
 
         if self.calibration:
         
-           print("INICIANDO CALIBRAÇÃO") 
-           calibrated_clf = CalibratedClassifierCV(
+            undersamp = SMOTE()
+            cal_X,cal_y = undersamp.fit_resample(cal_X,cal_y)
+            print("INICIANDO CALIBRAÇÃO") 
+            print("TAMANHO DO DATASET: {shape}".format(shape=cal_X.shape))
+            print("TAMANHO DA TARGET: {target}".format(target=sum(cal_y==1)))
+            print("TAMANHO DA N TARGET: {target}".format(target=sum(cal_y==0)))
+
+            
+            '''calibrated_clf = CalibratedClassifierCV(
                                 base_estimator=self.model,
                                 cv=self.config['calibration']['cv'],
-                                method=self.cal_method) 
+                                method=self.cal_method) '''
+            
+            calibrated_clf = SimpleCalibration(self.model,10)
 
-           self.base_model = self.model
-           self.model = calibrated_clf.fit(cal_X,cal_y)
+            self.base_model = self.model
+            self.model = calibrated_clf.fit(cal_X,cal_y)
 
         return self
 
@@ -129,7 +163,6 @@ class TrainPipe(BaseEstimator, TransformerMixin):
         
         if self.rpt:
             preds = self.preds
-            proba = self.proba[:,1]
 
             result = pd.DataFrame.from_dict(classification_report(y,preds,output_dict=True))
             result.to_csv('results.csv')
