@@ -7,7 +7,7 @@ features:
   features.py: gen_features
 train_flow: 
   n_samples: None
-target_advance: 1
+target_advance: 0
 score_flow:
   method:
     ParallelScore:

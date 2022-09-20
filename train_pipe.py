@@ -19,12 +19,18 @@ import csv
 import pandas as pd
 from plots_collection import calibration_plot
 from simple_calibration import SimpleCalibration
+from opt_threshold import OptThreshold
+from plots_collection import roc_curve_plot
+from plots_collection import targets_plot
+from results_collection import conversion_table
+from results_collection import lift
 
 class TrainPipe(BaseEstimator, TransformerMixin):
 
     tuning_f = {'trial.suggest_loguniform',
                 'trial.suggest_categorical',
-                'trial.suggest_int'}
+                'trial.suggest_int',
+                'trial.suggest_uniform'}
 
     def __init__(self,
                  config: str = "train_cfg.yaml"):
@@ -35,10 +41,17 @@ class TrainPipe(BaseEstimator, TransformerMixin):
         self.test_sample_rate = self.config['test_sample_rate']
         self.rpt = self.config['report']
         self.calibration = 'calibration' in self.config.keys()
-        self.optimize_threshold = 'optimize_threshold' in self.config
+        self.train_params = self.config['train']['params']
         
-        if self.calibration:
-            self.cal_sample_rate = self.config['calibration']['cal_sample_rate']
+        if 'optimize_threshold' in self.config.keys():
+            self.optimize_thresh = self.config['optimize_threshold']
+        else:
+            self.optimize_thresh = False
+        
+        if self.calibration or self.optimize_thresh:
+            self.opt_sample_rate = self.config['opt_sample_rate']
+        else:
+            self.opt_sample_rate = None
         
         self.tuning = 'tuning' in self.config.keys()
         
@@ -49,7 +62,7 @@ class TrainPipe(BaseEstimator, TransformerMixin):
 
 
     def _tuning_train(self, X, y):
-
+        
         def objective(trial, data=X, target=y):
      
             tuning_aux = self.tuning_cfg.copy()
@@ -71,7 +84,9 @@ class TrainPipe(BaseEstimator, TransformerMixin):
                                                                 test_size=self.tuning_sample,
                                                                 random_state=42)
 
-            model = self.clf(**tuning_aux)
+            params = self.train_params | tuning_aux
+            print(params)
+            model = self.clf(**params)
             model.fit(train_X,train_y)
             
             f_pred = getattr(model,self.tuning_pred)
@@ -115,12 +130,14 @@ class TrainPipe(BaseEstimator, TransformerMixin):
         train_X = X
         train_y = y
         
-        if self.calibration:
+        if self.calibration or self.optimize_thresh:
             
-            train_X, cal_X, train_y, cal_y = train_test_split(X, y, 
-                                                                test_size=self.cal_sample_rate,
+            train_X, cal_X, train_y, cal_y = train_test_split(train_X, train_y, 
+                                                                test_size=self.opt_sample_rate,
                                                                 random_state=42)
-            self.cal_method = self.config['calibration']['method']
+            
+            if self.calibration:
+                self.cal_method = self.config['calibration']['method']
 
         print("INICIALIZANDO TREINAMENTO COM UM DATASET DE TAMANHO {shape}".format(shape=X.shape))
         print("QUANTIDADE DE TARGETS: {targets}".format(targets=sum(y == 1)))
@@ -130,7 +147,9 @@ class TrainPipe(BaseEstimator, TransformerMixin):
         if self.tuning:
         
             best_trial_params = self._tuning_train(train_X, train_y)
-            self.model = self.clf(**best_trial_params)
+            params = self.train_params | best_trial_params 
+            print(params)
+            self.model = self.clf(**params)
             self.model.fit(train_X,train_y)
 
         else:
@@ -139,8 +158,8 @@ class TrainPipe(BaseEstimator, TransformerMixin):
 
         if self.calibration:
         
-            undersamp = SMOTE()
-            cal_X,cal_y = undersamp.fit_resample(cal_X,cal_y)
+            #undersamp = SMOTE()
+            #cal_X,cal_y = undersamp.fit_resample(cal_X,cal_y)
             print("INICIANDO CALIBRAÇÃO") 
             print("TAMANHO DO DATASET: {shape}".format(shape=cal_X.shape))
             print("TAMANHO DA TARGET: {target}".format(target=sum(cal_y==1)))
@@ -152,10 +171,15 @@ class TrainPipe(BaseEstimator, TransformerMixin):
                                 cv=self.config['calibration']['cv'],
                                 method=self.cal_method) '''
             
-            calibrated_clf = SimpleCalibration(self.model,10)
+            calibrated_clf = SimpleCalibration(self.model,500)
 
             self.base_model = self.model
             self.model = calibrated_clf.fit(cal_X,cal_y)
+            
+        if self.optimize_thresh:
+            
+            thresh_clf = OptThreshold(self.model)
+            self.model = thresh_clf.fit(cal_X,cal_y)
 
         return self
 
@@ -163,30 +187,36 @@ class TrainPipe(BaseEstimator, TransformerMixin):
         
         if self.rpt:
             preds = self.preds
+            proba = self.proba
 
             result = pd.DataFrame.from_dict(classification_report(y,preds,output_dict=True))
             result.to_csv('results.csv')
 
             if self.calibration:
                 mod = self.base_model
-                calibration_plot([(mod,'Descalibrado'),
-                                  (self.model,'Calibrado')],
-                                  self.X_test,
-                                  y)
+                calibration_plot(self.model,
+                                 proba[:,1],
+                                 y)
                 plt.savefig('cal_curve.png')
                 plt.close()
             else:
                 mod = self.model
 
-            feature_importances = pd.DataFrame.from_dict(mod.feature_importances_)
-            feature_importances.to_csv('feat_importances.csv')
+            roc_curve_plot(proba[:,1],y)
+            plt.savefig('roc_curve.png')
+            plt.close()
+            targets_plot(proba[:,1],y)
+            plt.savefig('targets_plot.png')
+            plt.close()
+            conversion = lift(y,proba,10)
+            conversion.to_csv('conversion_report.csv')
 
     def transform(self, X, y = None):
-
+    
         self.X_test = X
         self.preds = self.model.predict(X)
         self.proba = self.model.predict_proba(X)
 
-        return self.preds, self.proba
+        return self.preds
 
 

@@ -1,6 +1,6 @@
 model_name: ml_template_test
 labeled: True
-train_test_sample: 0.33
+train_test_sample: 0.20
 persist: True
 train_flow:
   - PrepPipe

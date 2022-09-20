@@ -80,7 +80,7 @@ class ETLPipe(BaseEstimator, TransformerMixin):
 
         if self.labeled:
             features = self.feats(self.safra)
-            target = self.targets(self.safra+1)
+            target = self.targets(self.safra+self.target_advance)
             pub = self.pubs(self.safra)
 
             if self.drop:

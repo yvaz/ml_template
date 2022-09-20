@@ -43,6 +43,8 @@ def train(model_name, safra, train_test_sample, persist):
         pickle.dump(pipe,fp)
 
     pipe.transform(test_X)
+    print('MAIN PROBA')
+    print(train.proba)
     train.report(test_y)
    
 def score(model_name,safra):

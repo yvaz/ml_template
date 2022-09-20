@@ -30,11 +30,11 @@ class PrepPipe(BaseEstimator, TransformerMixin):
             step_name = list(step.keys())[0]
             pack = importlib.import_module(step['package'])
             mod = getattr(pack,step['module'])
+            print(mod)
 
             if 'params' in step:
                 params = step['params']
                 print(params)
-                print(mod)
                 eval_p =  set(params).intersection(self.eval_params)
             
                 for p in eval_p:
@@ -55,6 +55,7 @@ class PrepPipe(BaseEstimator, TransformerMixin):
             else:
                 estimator = (step_name,mod())
 
+            print(estimator)
             mod_list.append(estimator)
 
         return mod_list
