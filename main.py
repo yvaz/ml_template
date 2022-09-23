@@ -1,6 +1,8 @@
-import etl_pipe as etlp
-import prep_pipe as prepp
-import train_pipe as trainp
+import core.etl as etlp
+import core.prep_pipe as prepp
+import core.train_pipe as trainp
+import core.scorer as scorep
+import core.evaluer as evalp
 from sklearn.pipeline import Pipeline
 import pickle
 import sys
@@ -9,72 +11,112 @@ from yaml.loader import SafeLoader
 from sklearn.model_selection import train_test_split
 from os.path import exists
 import pandas as pd
+from io_ml.io_parquet import IOParquet
 
-def train(model_name, safra, train_test_sample, persist):
-
-    # PREPARANDO PIPELINE
-    etl = etlp.ETLPipe(safra,persist=persist)
-    prep = prepp.PrepPipe()
-    train = trainp.TrainPipe()
-    pipe = Pipeline([('prep',prep),('train',train)])  
-
-    if exists('dataset.parquet'):
-        dset = pd.read_parquet('dataset.parquet', engine='pyarrow')
-        print("LENDO PARQUET DE DIM: {dim}".format(dim=dset.shape))
-        y = dset['target']
-        print("QUANTIDADE DE TARGETS: {targets}".format(targets=sum(y == 1)))
-        print("QUANTIDADE DE N TARGETS: {n_targets}".format(n_targets=sum(y == 0)))
-        print("TAXA TARGET {t_target}".format(t_target=sum(y == 1)/len(y)))
-        X = dset.drop('target',axis=1)
-        train_X, test_X, train_y, test_y = train_test_split(X, y, 
-                                            test_size=train_test_sample,
-                                            random_state=42)
-    else:       
-        #EXECUTANDO ETL DE TREINAMENTO
-        etl.fit()
-        X,y = etl.transform()
-        train_X, test_X, train_y, test_y = train_test_split(X, y, 
-                                            test_size=train_test_sample,
-                                            random_state=42)
-
-    pipe.fit(train_X,train_y)
-
-    with open(model_name+'.pkl','wb') as fp:
-        pickle.dump(pipe,fp)
-
-    pipe.transform(test_X)
-    print('MAIN PROBA')
-    print(train.proba)
-    train.report(test_y)
-   
-def score(model_name,safra):
-    print("NÃO IMPLEMENTADO")
+class Executor():
     
-    with open(model_name+'.pkl','rb') as fp:
-        model = pickle.load(fp)
+    def __init__(self,config,flow_type,safra):
+        
+        with open(config,'r') as fp:
+            self.config = yaml.load(fp, Loader = SafeLoader)
 
-    return model
+        self.model_name = self.config['model_name']
+        self.train_test_sample = self.config['train_test_sample']
+        self.persist = self.config['persist']
+        self.flow_type = flow_type
+        self.safra = safra
+        
+    def execute(self):
+        
+        if self.flow_type == 'train':
+            self.train()
+        elif self.flow_type == 'score':
+            self.score()
+        elif self.flow_type == 'eval':
+            self.evaluation()
+        else:
+            print('TIPO NÃO PERMITIDO')
+        
+        
+    def train(self):
+
+        # PREPARANDO PIPELINE
+        etl = etlp.ETL(self.safra,persist=self.persist)
+        prep = prepp.PrepPipe()
+        train = trainp.TrainPipe()
+        pipe = Pipeline([('prep',prep),('train',train)])  
+
+        if exists('registries/train_dataset.parquet'):
+            iop = IOParquet('registries/','train_dataset.parquet')
+            dset = iop.read()
+            y = dset['target']
+            X = dset.drop('target',axis=1)
+            train_X, test_X, train_y, test_y = train_test_split(X, y, 
+                                                test_size=self.train_test_sample,
+                                                random_state=42)
+        else:       
+            #EXECUTANDO ETL DE TREINAMENTO
+            etl.setup()
+            X,y = etl.extract()
+            train_X, test_X, train_y, test_y = train_test_split(X, y, 
+                                                test_size=self.train_test_sample,
+                                                random_state=42)
+
+        pipe.fit(train_X,train_y)
+
+        if not exists('registries'):
+            os.system('mkdir registries')
+        
+        with open('registries/'+self.model_name+'.pkl','wb') as fp:
+            pickle.dump(pipe,fp)
+
+        pipe.transform(test_X)
+        train.report(test_y,'train_results/')
+
+    def score(self):
+
+        # PREPARANDO PIPELINE
+        etl = etlp.ETL(self.safra,persist=self.persist,flow='score')
+        score = scorep.Scorer()
+
+        if exists('registries/score_dataset.parquet'):
+            iop = IOParquet('registries/','score_dataset.parquet')
+            X = iop.read()
+        else:       
+            #EXECUTANDO ETL DE ESCORAGEM
+            etl.setup()
+            X = etl.extract()
+
+        score.load_model()
+        score.score(X)
+
+    def evaluation(self):
+
+        # PREPARANDO PIPELINE
+        etl = etlp.ETL(self.safra,persist=self.persist,flow='eval')
+        evaluation = evalp.Evaluer()
+
+        if exists('registries/eval_dataset.parquet'):
+            iop = IOParquet('registries/','eval_dataset.parquet')
+            y = iop.read()
+        else:       
+            #EXECUTANDO ETL DE ESCORAGEM
+            etl.setup()
+            y = etl.extract()
+
+        evaluation.load_score()
+        evaluation.evaluate(y,'evaluation/')
     
 
 def main(argv):
 
     args = argv[1:]
     config = args[0]
-    is_train = args[1]
+    flow_type = args[1]
     safra = int(args[2])
 
-    with open(config,'r') as fp:
-        config = yaml.load(fp, Loader = SafeLoader)
-    
-    model_name = config['model_name']
-    train_test_sample = config['train_test_sample']
-    persist = config['persist']
-
-    if is_train:
-        train(model_name,safra,train_test_sample,persist)
-
-    else:
-        score(model_name,safra,train_test_sample)
+    exc = Executor(config,flow_type,safra)
+    exc.execute()
 
 if __name__ == '__main__':
     main(sys.argv)

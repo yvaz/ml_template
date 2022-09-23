@@ -1,0 +1,18 @@
+model_name: ml_template_test
+labeled: True
+train_test_sample: 0.20
+persist: True
+score:
+  tb_name: opf_optin_propensao.parquet
+  persist_method: 
+    package: io_ml.io_parquet
+    module: IOParquet
+    params:
+      path: registries/
+eval:
+  tb_name: opf_optin_propensao_eval.parquet
+  persist_method: 
+    package: io_ml.io_parquet
+    module: IOParquet
+    params:
+      path: registries/
