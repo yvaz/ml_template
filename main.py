@@ -113,7 +113,7 @@ def main(argv):
     args = argv[1:]
     config = args[0]
     flow_type = args[1]
-    safra = int(args[2])
+    safra = args[2]
 
     exc = Executor(config,flow_type,safra)
     exc.execute()

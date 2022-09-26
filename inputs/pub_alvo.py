@@ -16,7 +16,7 @@ def gen_pub(safra):
     )
 
     safra_ini = datetime.strftime(
-                    datetime.strptime(str(safra),"%Y%m")
+                    datetime.strptime(safra,"%Y%m")
                 ,"%Y-%m-%d")
     
     query = """

@@ -8,6 +8,7 @@ import pandas as pd
 from io_ml.io_parquet import IOParquet
 import os
 from os.path import exists
+from utils import date_utils as du
 
 class ETL():
 
@@ -27,6 +28,7 @@ class ETL():
         self.key = self.config['key']
         self.flow = flow
         self.labeled = labeled
+        self.recurrence = self.config['recurrence']
 
         self.n_samples = self.config['train_flow']['n_samples']
             
@@ -76,7 +78,7 @@ class ETL():
 
         if self.labeled:
             features = self.feats(self.safra)
-            target = self.targets(self.safra+self.target_advance)
+            target = self.targets(du.DateUtils.add(self.safra,self.target_advance,self.recurrence))
             pub = self.pubs(self.safra)
 
             if self.drop:
@@ -126,8 +128,8 @@ class ETL():
 
     def _extract_score(self):
         
-        features = self.feats(self.safra+1)
-        pub = self.pubs(self.safra+1)
+        features = self.feats(du.DateUtils.add(self.safra,1,self.recurrence))
+        pub = self.pubs(du.DateUtils.add(self.safra,1,self.recurrence))
 
         if self.drop:
             features = features.drop(self.drop, axis=1)
@@ -141,8 +143,8 @@ class ETL():
 
     def _extract_eval(self):
         
-        targets = self.targets(self.safra+2)
-        pub = self.pubs(self.safra+1)
+        targets = self.targets(du.DateUtils.add(self.safra,self.target_advance+1,self.recurrence))
+        pub = self.pubs(du.DateUtils.add(self.safra,1,self.recurrence))
 
         master = pub.merge(targets,how='left',on=self.key)
         master['target'] = master['target'].fillna(0)

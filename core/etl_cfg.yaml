@@ -12,3 +12,4 @@ score_flow:
   method:
     ParallelScore:
       n_folds: 10
+recurrence: month
