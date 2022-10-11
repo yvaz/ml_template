@@ -14,11 +14,10 @@ class SimpleCalibration(BaseEstimator, TransformerMixin):
     def _get_cuts(self,X):
         
         preds = self.clf.predict_proba(X)
-        max_preds = max(preds[:,1])
-        min_preds = min(preds[:,1])
-        cuts = pd.cut(preds[:,1],self.n_bins,labels=range(0,self.n_bins))
-        
-        print(cuts)
+        max_preds = max(preds[:,0])
+        min_preds = min(preds[:,0])
+        pred_pd = pd.DataFrame(preds,columns=['PR_0','PR_1'])
+        cuts = pd.qcut(pred_pd['PR_1'].rank(method='first'),self.n_bins,labels=range(0,self.n_bins))
         
         pred_cuts = pd.DataFrame({'predict_0':preds[:,0],'predict_1':preds[:,1],'bins':cuts})
         return pred_cuts
@@ -59,7 +58,7 @@ class SimpleCalibration(BaseEstimator, TransformerMixin):
         ret[ret >= 0.5] = 1
         ret[ret < 0.5] = 0
         
-        return ret.to_array()
+        return ret.to_numpy()
     
     def predict_proba(self,X):
         

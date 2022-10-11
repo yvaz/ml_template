@@ -9,9 +9,12 @@ from io_ml.io_parquet import IOParquet
 import os
 from os.path import exists
 from utils import date_utils as du
+from io_ml import io_metadata
 
 class ETL():
 
+    metadata_key = 'etl_pipe'
+    
     def __init__(self,
                  safra: int,
                  config: str = "core/etl_cfg.yaml", 
@@ -20,6 +23,7 @@ class ETL():
                  persist=True):
 
         self.safra = safra
+        self.metadata = io_metadata.IOMetadata()
 
         with open(config,'r') as fp:
             self.config = yaml.load(fp, Loader = SafeLoader)
@@ -73,7 +77,7 @@ class ETL():
 
         feats_mod = importlib.import_module(self.feats_mod)
         self.feats = getattr(feats_mod,self.feats_met)
-
+    
     def _extract_train(self):
 
         if self.labeled:
@@ -108,6 +112,13 @@ class ETL():
                 io_parquet = IOParquet('registries/','train_dataset.parquet')
                 io_parquet.write(master)
             
+            self.metadata.append_data(self.metadata_key,
+                                      {'feat_dim':list(df_X.shape)})
+            self.metadata.append_data(self.metadata_key,
+                                      {'class_proportion':len(df_y[df_y == 1])/len(df_y)})
+            self.metadata.append_data(self.metadata_key,
+                                      {'var_names':df_X.columns.tolist()})
+            
             return df_X, df_y
 
         else:
@@ -123,13 +134,30 @@ class ETL():
             
             if self.persist:
                 self._persist(master,'train_dataset.parquet')
+            
+            self.metadata.append_data(self.metadata_key,
+                                      {'feat_dim':list(master.shape)})
+            self.metadata.append_data(self.metadata_key,
+                                      {'feat_names':master.columns.tolist()})
 
             return master
 
     def _extract_score(self):
         
-        features = self.feats(du.DateUtils.add(self.safra,1,self.recurrence))
-        pub = self.pubs(du.DateUtils.add(self.safra,1,self.recurrence))
+        feat_safra = du.DateUtils.add(self.safra,1,self.recurrence)
+        pub_safra = du.DateUtils.add(self.safra,1,self.recurrence)
+        
+        self.metadata.append_data(self.metadata_key,
+                                  {
+                                      'score_safra':
+                                          {'feat':feat_safra,
+                                            'pub':pub_safra
+                                          }
+                                  }
+                                 )
+            
+        features = self.feats(feat_safra)
+        pub = self.pubs(pub_safra)
 
         if self.drop:
             features = features.drop(self.drop, axis=1)
@@ -143,8 +171,20 @@ class ETL():
 
     def _extract_eval(self):
         
-        targets = self.targets(du.DateUtils.add(self.safra,self.target_advance+1,self.recurrence))
-        pub = self.pubs(du.DateUtils.add(self.safra,1,self.recurrence))
+        target_safra = du.DateUtils.add(self.safra,self.target_advance+1,self.recurrence)
+        pub_safra = du.DateUtils.add(self.safra,1,self.recurrence)
+        
+        self.metadata.append_data(self.metadata_key,
+                                  {
+                                      'eval_safra':
+                                          {'target':target_safra,
+                                            'pub':pub_safra
+                                          }
+                                  }
+                                 )
+                              
+        targets = self.targets(target_safra)
+        pub = self.pubs(pub_safra)
 
         master = pub.merge(targets,how='left',on=self.key)
         master['target'] = master['target'].fillna(0)
@@ -165,16 +205,19 @@ class ETL():
             
     
     def extract(self):
-
+                              
         if self.flow == 'train':
 
-            return self._extract_train()
+            data = self._extract_train()
 
         elif self.flow == 'score':
-
-            return self._extract_score()
+            
+            data = self._extract_score()
         
         elif self.flow == 'eval':
             
-            return self._extract_eval()
+            data = self._extract_eval()
+        
+        self.metadata.write()
+        return data
 

@@ -9,9 +9,8 @@ import pandas as pd
 class PlotsCollection():
     
     @staticmethod
-    def calibration_plot(clf,X_test,y_true):
+    def calibration_plot(y_pred,y_true):
 
-        y_pred = clf.predict_proba(X_test)[:,1]
         prob_true, prob_pred = calibration_curve(y_true, y_pred, n_bins=10)
         plt.plot(prob_true,prob_pred)
 

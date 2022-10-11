@@ -12,6 +12,8 @@ from sklearn.model_selection import train_test_split
 from os.path import exists
 import pandas as pd
 from io_ml.io_parquet import IOParquet
+from datetime import datetime
+import os
 
 class Executor():
     
@@ -26,6 +28,28 @@ class Executor():
         self.flow_type = flow_type
         self.safra = safra
         
+    def write_pickle(self,pipe):
+        
+        current_date = datetime.now().strftime('%Y%m%d%H%M%S')
+        path = 'registries/pkl_{safra}'.format(safra=self.safra)
+        
+        if exists(path):
+                    
+            with open('{path}/{model_name}_{current_date}.pkl'.format(path=path,
+                                                                      model_name=self.model_name,
+                                                                      current_date=current_date),'wb') as fp:
+                pickle.dump(pipe,fp)
+        
+        else:
+
+            os.system('mkdir {path}'.format(path=path))
+
+            with open('{path}/{model_name}_{current_date}.pkl'.format(path=path,
+                                                                  model_name=self.model_name,
+                                                                  current_date=current_date),'wb') as fp:
+                pickle.dump(pipe,fp)
+            
+    
     def execute(self):
         
         if self.flow_type == 'train':
@@ -67,8 +91,7 @@ class Executor():
         if not exists('registries'):
             os.system('mkdir registries')
         
-        with open('registries/'+self.model_name+'.pkl','wb') as fp:
-            pickle.dump(pipe,fp)
+        self.write_pickle(pipe)
 
         pipe.transform(test_X)
         train.report(test_y,'train_results/')
@@ -77,7 +100,7 @@ class Executor():
 
         # PREPARANDO PIPELINE
         etl = etlp.ETL(self.safra,persist=self.persist,flow='score')
-        score = scorep.Scorer()
+        score = scorep.Scorer(safra=self.safra)
 
         if exists('registries/score_dataset.parquet'):
             iop = IOParquet('registries/','score_dataset.parquet')

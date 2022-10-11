@@ -7,11 +7,13 @@ from yaml.loader import SafeLoader
 import importlib
 import imp
 import numpy as np
+from io_ml import io_metadata
 
 class PrepPipe(BaseEstimator, TransformerMixin):
 
     estimator_params = {'boruta':['estimator']}
     eval_params = ['missing_values']
+    metadata_key = 'prep_pipe'
 
     def __init__(self,
                  config: str = "core/prep_cfg.yaml"):
@@ -19,26 +21,26 @@ class PrepPipe(BaseEstimator, TransformerMixin):
         with open(config,'r') as fp:
             self.config = yaml.load(fp, Loader = SafeLoader)
 
+        self.metadata = io_metadata.IOMetadata()
+        self.cat_steps = self.config['categorical']['steps']
+        self.num_steps = self.config['numerical']['steps']
+        self.final_steps = self.config['final']['steps']
+
     def _create_pipe(self, steps):
         
         mod_list = []  
 
         for step in steps:
-                
-            print(step)
 
             step_name = list(step.keys())[0]
             pack = importlib.import_module(step['package'])
             mod = getattr(pack,step['module'])
-            print(mod)
 
             if 'params' in step:
                 params = step['params']
-                print(params)
                 eval_p =  set(params).intersection(self.eval_params)
             
                 for p in eval_p:
-                    print(params[p])
                     params[p] = eval(params[p])
 
                 if step['package'] in self.estimator_params.keys():
@@ -66,10 +68,6 @@ class PrepPipe(BaseEstimator, TransformerMixin):
         cats = self.config['categories']
         nums = list(set(X.columns) - set(cats))
 
-        self.cat_steps = self.config['categorical']['steps']
-        self.num_steps = self.config['numerical']['steps']
-        self.final_steps = self.config['final']['steps']
-
         cat_pipe = Pipeline(self._create_pipe(self.cat_steps))
         num_pipe = Pipeline(self._create_pipe(self.num_steps))
         final_pipe = Pipeline(self._create_pipe(self.final_steps))
@@ -85,7 +83,15 @@ class PrepPipe(BaseEstimator, TransformerMixin):
         
         self.pipe = Pipeline([('preproc',col_transformer),('final',final_pipe)])
         self.pipe.fit(X,y)
-
+            
+        self.metadata.append_data(self.metadata_key,
+                                  {'feat_dim':list(X.shape)})
+        self.metadata.append_data(self.metadata_key,
+                                  {'class_proportion':len(y[y == 1])/len(y)})
+        self.metadata.append_data(self.metadata_key,
+                                  {'var_names':X.columns.tolist()})
+        self.metadata.write()
+        
         return self
 
     def transform(self, X, y = None):

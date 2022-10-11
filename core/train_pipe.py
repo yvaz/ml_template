@@ -23,6 +23,7 @@ from utils.simple_calibration import SimpleCalibration
 from utils.opt_threshold import OptThreshold
 import os
 import shap
+from io_ml import io_metadata
 
 class TrainPipe(BaseEstimator, TransformerMixin):
 
@@ -30,12 +31,16 @@ class TrainPipe(BaseEstimator, TransformerMixin):
                 'trial.suggest_categorical',
                 'trial.suggest_int',
                 'trial.suggest_uniform'}
+    
+    metadata_key = 'train_pipe'
 
     def __init__(self,
                  config: str = "core/train_cfg.yaml"):
 
         with open(config,'r') as fp:
             self.config = yaml.load(fp, Loader = SafeLoader)
+            
+        self.metadata = io_metadata.IOMetadata()
 
         self.test_sample_rate = self.config['test_sample_rate']
         self.rpt = self.config['report']
@@ -142,7 +147,6 @@ class TrainPipe(BaseEstimator, TransformerMixin):
         
             best_trial_params = self._tuning_train(train_X, train_y)
             params = self.train_params | best_trial_params 
-            print(params)
             self.model = self.clf(**params)
             self.model.fit(train_X,train_y)
 
@@ -151,21 +155,16 @@ class TrainPipe(BaseEstimator, TransformerMixin):
             self.model = self.clf(**self.config['train']['params'])
 
         if self.calibration:
-        
-            #undersamp = SMOTE()
-            #cal_X,cal_y = undersamp.fit_resample(cal_X,cal_y)
-            print("INICIANDO CALIBRAÇÃO") 
-            print("TAMANHO DO DATASET: {shape}".format(shape=cal_X.shape))
-            print("TAMANHO DA TARGET: {target}".format(target=sum(cal_y==1)))
-            print("TAMANHO DA N TARGET: {target}".format(target=sum(cal_y==0)))
-
             
-            '''calibrated_clf = CalibratedClassifierCV(
+            rus = SMOTE()
+            cal_X,cal_y = rus.fit_resample(cal_X,cal_y)
+            
+            calibrated_clf = CalibratedClassifierCV(
                                 base_estimator=self.model,
                                 cv=self.config['calibration']['cv'],
-                                method=self.cal_method) '''
+                                method=self.cal_method)
             
-            calibrated_clf = SimpleCalibration(self.model,500)
+            #calibrated_clf = SimpleCalibration(self.model,1000)
 
             self.base_model = self.model
             self.model = calibrated_clf.fit(cal_X,cal_y)
@@ -174,6 +173,17 @@ class TrainPipe(BaseEstimator, TransformerMixin):
             
             thresh_clf = OptThreshold(self.model)
             self.model = thresh_clf.fit(cal_X,cal_y)
+            
+        self.metadata.append_data(self.metadata_key,
+                                  {'feat_dim':list(train_X.shape)})
+        self.metadata.append_data(self.metadata_key,
+                                  {'class_proportion':len(train_y[train_y == 1])/len(train_y)})
+        
+        print('METADATA')
+        print(self.metadata)
+        print(self.metadata.metadata)
+        
+        self.metadata.write()
 
         return self
 
@@ -192,19 +202,17 @@ class TrainPipe(BaseEstimator, TransformerMixin):
 
             if self.calibration:
                 mod = self.base_model
-                calibration_plot(self.model,
-                                 proba[:,1],
-                                 y)
+                pc.PlotsCollection.calibration_plot(proba[:,1],y)
                 plt.savefig(path+'cal_curve.png')
                 plt.close()
             else:
                 mod = self.model
-                
-            tree_explainer = shap.Explainer(self.model)
-            shap_values = tree_explainer.shap_values(self.X_test)
-            shap.summary_plot(shap_values, self.X_test)           
-            plt.savefig(path+'shap_importance.png')
-            plt.close()
+                tree_explainer = shap.Explainer(self.model)
+                shap_values = tree_explainer.shap_values(self.X_test)
+                shap.summary_plot(shap_values, self.X_test, 
+                                  feature_names=self.metadata.metadata['prep_pipe']['var_names'])           
+                plt.savefig(path+'shap_importance.png')
+                plt.close()
             
             pc.PlotsCollection.roc_curve_plot(proba[:,1],y)
             plt.savefig(path+'roc_curve.png')

@@ -3,7 +3,7 @@ train:
   module: LGBMClassifier
   params:
     boosting_type: gbdt
-    n_estimators: 200
+    n_estimators: 2000
     max_depth: 5
     is_unbalance: "true"
 test_sample_rate: 0.20
@@ -34,7 +34,7 @@ tuning:
 #calibration:
 #  method: sigmoid
 #  cv: prefit
-#  cal_sample_rate: 0.33
+#  cal_sample_rate: 0.20
 #optimize_threshold: True
 report: True
 opt_sample_rate: 0.20

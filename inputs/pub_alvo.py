@@ -160,10 +160,10 @@ def gen_pub(safra):
                     LEFT JOIN CUSTS_IN AS CI ON CA.cus_cust_id = CI.CUS_CUST_ID
                 WHERE
                     STATUS = 'ACTIVE'
-                    AND SC30.AVAILABLE_BALANCE > 0
+                    -- AND SC30.AVAILABLE_BALANCE > 0
                     AND EM.cus_cust_id IS NULL
                     AND P30.CUS_CUST_ID IS NOT NULL
-                    AND P30.NR_OPENS > 0
+                    -- AND P30.NR_OPENS > 0
                     AND CC.SEGMENT <> 'SELLER'
                 AND (
                     CI.FLAG_IN_MES IS NULL

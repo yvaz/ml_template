@@ -4,10 +4,13 @@ import pickle
 import pandas as pd
 import numpy as np
 import importlib
+import os
+import re
 
 class Scorer():
 
     def __init__(self,
+                 safra: int,
                  config: str = "core/main_cfg.yaml"):
 
         with open(config,'r') as fp:
@@ -18,11 +21,52 @@ class Scorer():
         self.persist_params = self.config['score']['persist_method']['params']
         self.persist_params['tb_name'] = self.config['score']['tb_name']
         self.model_name = self.config['model_name']
+        self.safra = safra
+        
+    def get_last_trained_safra(self):
+        
+        path = 'registries/'
+        print(os.listdir(path))
+        pkls = sorted(
+                filter(
+                lambda x: bool(re.search(r"pkl_[0-9]+", x)),
+                os.listdir(path)
+            )
+        )
+        
+        print(pkls)
+        safras = np.array(
+                     list(
+                         map(
+                            lambda x : int(x.replace('pkl_','')),
+                            pkls
+                        )
+                    )
+                 )
+        
+        print(safras <= int(self.safra))
+        safras = safras[safras <= int(self.safra)]
+        
+        return max(safras)
+        
         
 
     def load_model(self):
-
-        with open('registries/'+self.model_name+'.pkl','rb') as fp:
+        
+        safra_alvo = self.get_last_trained_safra()
+        
+        path = 'registries/pkl_{safra}/'.format(safra=safra_alvo)
+        
+        list_of_files = sorted(
+                            filter(
+                                lambda x: os.path.isfile(os.path.join(path, x)),
+                                os.listdir(path)
+                            )
+                        )
+        
+        last_pickle = list_of_files[-1]
+        
+        with open(path+last_pickle,'rb') as fp:
             self.model = pickle.load(fp)
 
     def score(self,X,y=None):

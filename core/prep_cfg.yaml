@@ -32,6 +32,9 @@ numerical:
     module: MinMaxScaler
 final:
   steps:
+    - imbalance:
+      package: imblearn.under_sampling
+      module: RandomUnderSampler
     - dim_reduction:
       package: sklearn.feature_selection
       module: VarianceThreshold
