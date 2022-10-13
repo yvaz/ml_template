@@ -6,7 +6,7 @@ import numpy as np
 import importlib
 import os
 import re
-from utils.date_utils import DateUtils as du
+from utils import date_utils as du
 
 class Scorer():
 
