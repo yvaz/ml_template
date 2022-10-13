@@ -6,6 +6,7 @@ import numpy as np
 import importlib
 import os
 import re
+from utils.date_utils import DateUtils as du
 
 class Scorer():
 
@@ -83,6 +84,8 @@ class Scorer():
         mod = importlib.import_module(self.persist_package)
         io = getattr(mod,self.persist_module)    
             
+        res['safra'] = du.DateUtils.add(self.safra,1)
+        
         io_c = io(**self.persist_params)
-        io_c.write(res[['CUS_CUST_ID','scores_0','scores_1']])
+        io_c.write(res[['CUS_CUST_ID','scr_grp','scores_0','scores_1','safra']])
 
