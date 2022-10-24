@@ -10,6 +10,7 @@ import os
 from os.path import exists
 from utils import date_utils as du
 from io_ml import io_metadata
+from utils.logger import Logger
 
 class ETL():
 
@@ -22,10 +23,15 @@ class ETL():
                  labeled: bool = True,
                  persist=True):
 
+        self.logger = Logger(self)
+        
+        self.logger.log('Inicializando ETL')
+        
         self.safra = safra
         self.metadata = io_metadata.IOMetadata()
+        self.config_name = config
 
-        with open(config,'r') as fp:
+        with open(self.config_name,'r') as fp:
             self.config = yaml.load(fp, Loader = SafeLoader)
     
 
@@ -63,6 +69,8 @@ class ETL():
 
     def setup(self):
 
+        self.logger.log('Configurando ETL a partir de {cfg}'.format(cfg=self.config_name))
+        
         if self.imbalanced:
             mod_class_blce = importlib.import_module(self.class_blce_mod)
             self.class_blce = getattr(mod_class_blce,self.class_blce_met)
@@ -81,12 +89,15 @@ class ETL():
     def _extract_train(self):
 
         if self.labeled:
+            
+            self.logger.log('Extraindo dataset de treinamento para aprendizado supervisionado')
+            
             features = self.feats(self.safra)
             target = self.targets(du.DateUtils.add(self.safra,self.target_advance,self.recurrence))
             pub = self.pubs(self.safra)
 
             if self.drop:
-                features = features.drop(self.drop, axis=1)
+                features = self._drop(features)
                 
             master = pub.merge(features,how='left',on=self.key)\
                             .merge(target,how='left',on=self.key)
@@ -94,6 +105,7 @@ class ETL():
             master['target'] = master['target'].fillna(0)
 
             if self.n_samples != 'None':
+                self.logger.log('Selecionando subsampling do dataset')
                 master = master.sample(self.n_samples)
                 
             master = master.drop(self.key, axis=1)
@@ -102,6 +114,7 @@ class ETL():
             y = master['target']
 
             if self.imbalanced:
+                self.logger.log('Efetuando balanceamento de classes')
                 blce = self.class_blce()
                 df_X, df_y = blce.fit_resample(X, y)
             else:
@@ -109,24 +122,26 @@ class ETL():
                 df_y = y
             
             if self.persist:
-                io_parquet = IOParquet('registries/','train_dataset.parquet')
-                io_parquet.write(master)
+                self._persist(master,'train_dataset.parquet')
             
-            self.metadata.append_data(self.metadata_key,
-                                      {'feat_dim':list(df_X.shape)})
-            self.metadata.append_data(self.metadata_key,
-                                      {'class_proportion':len(df_y[df_y == 1])/len(df_y)})
-            self.metadata.append_data(self.metadata_key,
-                                      {'var_names':df_X.columns.tolist()})
+            meta = [
+                      {'feat_dim':list(df_X.shape)},
+                      {'class_proportion':len(df_y[df_y == 1])/len(df_y)},
+                      {'var_names':df_X.columns.tolist()}
+                    ]
+            self.metadata.meta_by_list(self.metadata_key,meta)
             
             return df_X, df_y
 
         else:
+                        
+            self.logger.log('Extraindo dataset de treinamento para aprendizado não-supervisionado')
+                                
             features = self.features(self.safra)
             pub = self.pub(self.safra)
 
             if self.drop:
-                features.drop(self.drop, axis=1)
+                features = self._drop(features)
 
             master = pub.merge(features,how='left',on='user_id')
 
@@ -135,53 +150,49 @@ class ETL():
             if self.persist:
                 self._persist(master,'train_dataset.parquet')
             
-            self.metadata.append_data(self.metadata_key,
-                                      {'feat_dim':list(master.shape)})
-            self.metadata.append_data(self.metadata_key,
-                                      {'feat_names':master.columns.tolist()})
+            meta = [{'feat_dim':list(master.shape)},
+                    {'feat_names':master.columns.tolist()}]
+            self.metadata.meta_by_list(self.metadata_key,meta)
 
             return master
 
     def _extract_score(self):
         
+        self.logger.log('Extraindo dataset de escoragem')
+                        
         feat_safra = du.DateUtils.add(self.safra,1,self.recurrence)
         pub_safra = du.DateUtils.add(self.safra,1,self.recurrence)
-        
-        self.metadata.append_data(self.metadata_key,
-                                  {
-                                      'score_safra':
-                                          {'feat':feat_safra,
-                                            'pub':pub_safra
-                                          }
-                                  }
-                                 )
             
         features = self.feats(feat_safra)
         pub = self.pubs(pub_safra)
 
         if self.drop:
-            features = features.drop(self.drop, axis=1)
+                features = self._drop(features)
 
         master = pub.merge(features,how='left',on=self.key)
 
         if self.persist:
             self._persist(master,'score_dataset.parquet')
 
+        
+        meta = [
+                  {
+                      'score_safra':
+                          {'feat':feat_safra,
+                            'pub':pub_safra
+                          }
+                  }
+                ]
+        self.metadata.meta_by_list(self.metadata_key,meta)
+        
         return master
 
     def _extract_eval(self):
         
+        self.logger.log('Extraindo dataset de avaliação')
+        
         target_safra = du.DateUtils.add(self.safra,self.target_advance+1,self.recurrence)
         pub_safra = du.DateUtils.add(self.safra,1,self.recurrence)
-        
-        self.metadata.append_data(self.metadata_key,
-                                  {
-                                      'eval_safra':
-                                          {'target':target_safra,
-                                            'pub':pub_safra
-                                          }
-                                  }
-                                 )
                               
         targets = self.targets(target_safra)
         pub = self.pubs(pub_safra)
@@ -191,19 +202,34 @@ class ETL():
         
         if self.persist:
             self._persist(master,'eval_dataset.parquet')
+        
+        meta = [{
+                  'eval_safra':
+                      {'target':target_safra,
+                        'pub':pub_safra
+                      }
+                }]
+        self.metadata.meta_by_list(self.metadata_key,meta)
 
         return master
 
     def _persist(self,dset,fname):
         
+        self.logger.log('Persistindo dataset de treinamento em registries')
+                        
         if not exists('registries'):
             
             os.system('mkdir registries')
             
         io_parquet = IOParquet('registries/',fname)
         io_parquet.write(dset)
-            
-    
+                        
+    def _drop(self,features):
+                
+        self.logger.log('Dropando variáveis defindas no arquivo de configuração')
+        features = features.drop(self.drop, axis=1)
+        return features    
+                        
     def extract(self):
                               
         if self.flow == 'train':

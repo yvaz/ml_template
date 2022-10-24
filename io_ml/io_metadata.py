@@ -3,6 +3,7 @@ import os
 import yaml
 from yaml.loader import SafeLoader
 from io_ml.io_ml_singleton import IO_ML_Singleton
+from utils.logger import Logger
     
 class IOMetadata(IO_ML_Singleton):
     
@@ -24,9 +25,13 @@ class IOMetadata(IO_ML_Singleton):
                 
             for k in dict_data.keys():
                 self.metadata[key][k] = dict_data[k]
-                
-        print('APPEND')
-        print(self.metadata)
+    
+    def meta_by_list(self,
+                     key: str,
+                     meta_l: list):
+        
+        for m in meta_l:
+            self.append_data(key,m)
     
     def read(self):
         
@@ -34,13 +39,8 @@ class IOMetadata(IO_ML_Singleton):
             with open(self.file_name,'r') as fp:
                 self.metadata = yaml.load(fp, Loader = SafeLoader)
                 fp.close()
-            
-        print('READ')
-        print(self.metadata)
         
     def write(self):
-        print('WRITE')
-        print(self.metadata)
         with open(self.file_name,'w') as fp:
             yaml.dump(self.metadata, fp)
             fp.close()

@@ -8,19 +8,24 @@ import importlib
 import imp
 import numpy as np
 from io_ml import io_metadata
+from utils.logger import Logger
 
 class PrepPipe(BaseEstimator, TransformerMixin):
 
     estimator_params = {'boruta':['estimator']}
     eval_params = ['missing_values']
+    
     metadata_key = 'prep_pipe'
 
     def __init__(self,
                  config: str = "core/prep_cfg.yaml"):
 
-        with open(config,'r') as fp:
+        self.config_name = config
+        
+        with open(self.config_name,'r') as fp:
             self.config = yaml.load(fp, Loader = SafeLoader)
 
+        self.logger = Logger(self)
         self.metadata = io_metadata.IOMetadata()
         self.cat_steps = self.config['categorical']['steps']
         self.num_steps = self.config['numerical']['steps']
@@ -29,9 +34,10 @@ class PrepPipe(BaseEstimator, TransformerMixin):
     def _create_pipe(self, steps):
         
         mod_list = []  
-
+        
         for step in steps:
 
+            self.logger.log('Configurando passo: {step}'.format(step=step))
             step_name = list(step.keys())[0]
             pack = importlib.import_module(step['package'])
             mod = getattr(pack,step['module'])
@@ -57,7 +63,6 @@ class PrepPipe(BaseEstimator, TransformerMixin):
             else:
                 estimator = (step_name,mod())
 
-            print(estimator)
             mod_list.append(estimator)
 
         return mod_list
@@ -68,8 +73,17 @@ class PrepPipe(BaseEstimator, TransformerMixin):
         cats = self.config['categories']
         nums = list(set(X.columns) - set(cats))
 
+        
+        self.logger.log('Definindo configurações à partir do arquivo {cfg}'.format(cfg=self.config_name))
+        
+
+        self.logger.log('Configurando pré-processamento de variáveis categóricas')
         cat_pipe = Pipeline(self._create_pipe(self.cat_steps))
+
+        self.logger.log('Configurando pré-processamento de variáveis numéricas')
         num_pipe = Pipeline(self._create_pipe(self.num_steps))
+
+        self.logger.log('Configurando fluxo final')
         final_pipe = Pipeline(self._create_pipe(self.final_steps))
 
         col_transformer = ColumnTransformer(
@@ -80,16 +94,19 @@ class PrepPipe(BaseEstimator, TransformerMixin):
         )
 
         X[nums] = X[nums].astype(float)
-        
+
+        self.logger.log('Construindo pipeline')
         self.pipe = Pipeline([('preproc',col_transformer),('final',final_pipe)])
+        self.logger.log('FIT')
         self.pipe.fit(X,y)
             
-        self.metadata.append_data(self.metadata_key,
-                                  {'feat_dim':list(X.shape)})
-        self.metadata.append_data(self.metadata_key,
-                                  {'class_proportion':len(y[y == 1])/len(y)})
-        self.metadata.append_data(self.metadata_key,
-                                  {'var_names':X.columns.tolist()})
+        meta = [
+                  {'feat_dim':list(X.shape)},
+                  {'class_proportion':len(y[y == 1])/len(y)},
+                  {'var_names':X.columns.tolist()}
+                ]
+        
+        self.metadata.meta_by_list(self.metadata_key,meta)
         self.metadata.write()
         
         return self
