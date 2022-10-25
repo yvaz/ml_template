@@ -164,7 +164,7 @@ def gen_pub(safra):
                     AND EM.cus_cust_id IS NULL
                     AND P30.CUS_CUST_ID IS NOT NULL
                     -- AND P30.NR_OPENS > 0
-                    AND CC.SEGMENT <> 'SELLER'
+                    AND CC.SEGMENT = 'SELLER'
                 AND (
                     CI.FLAG_IN_MES IS NULL
                     OR CI.FLAG_IN_MES = 'S'
