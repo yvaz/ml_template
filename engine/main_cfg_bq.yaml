@@ -1,0 +1,16 @@
+model_name: opf-sellers-optin
+labeled: True
+train_test_sample: 0.20
+persist: 'always'
+score:
+  tb_name: meli-bi-data.ML_TBL.TB_PROPENSITY_SCORES
+  persist_method: 
+    package: io_ml.io_bq
+    module: IO_BQ
+eval:
+  tb_name: opf_optin_propensao_eval.parquet
+  persist_method: 
+    package: io_ml.io_parquet
+    module: IOParquet
+    params:
+      path: registries/
