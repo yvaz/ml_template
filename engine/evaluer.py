@@ -112,10 +112,17 @@ class Evaluer():
         conv['SAFRA'] = datetime.strptime(du.DateUtils.add(self.safra,1),'%Y%m')
         conv['DT_EXEC'] = datetime.now().strftime('%Y%m%d%H%M%S')
         
+        conv = pd.concat(
+            [pd.DataFrame(self.model_name,index=range(conv.shape[0]),columns=['MODEL_NAME'])\
+                 .reset_index(drop=True)
+             ,conv],
+            axis=1
+        )
+        
         self.logger.log(conv.columns)
         
         
-        conv.columns = ['DECIL','PUBLICO','CONVERSAO','RESP_RATE',
+        conv.columns = ['MODEL_NAME','DECIL','PUBLICO','CONVERSAO','RESP_RATE',
                               'LIFT','CONVERSAO_ACC','CONVERSAO_PERC','KS',
                               'SAFRA','DT_EXEC']
         
