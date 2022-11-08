@@ -5,6 +5,7 @@ import os
 import pandas as pd
 from io_ml.io_ml import IO_ML
 from utils.logger import Logger
+from datetime import datetime
 
 class IO_BQ(IO_ML):
     
@@ -16,11 +17,19 @@ class IO_BQ(IO_ML):
                 credentials=credentials
             )
     
-    def read(self):
-        print('NOT IMPLEMENTED')
-    
+    def read(self,query):
+        
+        self.logger.log('QUERY READ: {query}'.format(query=query))
+        
+        df = self.bigquery.execute_response(query,output='df')
+        
+        self.logger.log('DF: {df}'.format(df=df))
+        self.logger.log('DF COLS: {cols}'.format(cols=df.columns))
+        
+        return df
+        
     def write(self,data):      
         
-        data.to_csv('scores_tmp.csv',index=False, header=False)
-        self.bigquery.fast_load('scores_tmp.csv','{tb_name}'.format(tb_name=self.tb_name))
-        os.system('rm -f scores_tmp.csv')
+        data.to_csv('data_tmp.csv',index=False, header=False)
+        self.bigquery.fast_load('data_tmp.csv','{tb_name}'.format(tb_name=self.tb_name))
+        os.system('rm -f data_tmp.csv')

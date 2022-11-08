@@ -163,7 +163,7 @@ class Executor():
     def _evaluation(self,fname,etl):
 
         # PREPARANDO PIPELINE
-        evaluation = evalp.Evaluer()
+        evaluation = evalp.Evaluer(safra=self.safra)
 
         if exists('registries/eval_dataset.parquet'):
             iop = IOParquet('registries/','eval_dataset.parquet')
