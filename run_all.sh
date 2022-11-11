@@ -1,3 +1,3 @@
-python3 -m executor core/main_cfg.yaml train 202207 > train_log.txt    
-python3 -m executor core/main_cfg.yaml score 202207 > score_log.txt
-python3 -m executor core/main_cfg.yaml eval 202207 > eval_log.txt
+python3 -m executor engine/main_cfg.yaml train 202208 > train_log.txt    
+python3 -m executor engine/main_cfg.yaml score 202208 > score_log.txt
+python3 -m executor engine/main_cfg.yaml eval 202208 > eval_log.txt

@@ -37,5 +37,13 @@ tuning:
 #  cal_sample_rate: 0.20
 #optimize_threshold: True
 report: True
+upload_report:
+  package: io_ml.io_s3
+  module: IO_S3
+  params:
+    acc_key_name: SECRET_SECRET_S3_ACCESS_KEY
+    sec_key_name: SECRET_SECRET_S3_SECRET_KEY
+    remote_path: prod/meliextra/modelo/opf/
+    bucket: analytics.data.ml
 opt_sample_rate: 0.20
 

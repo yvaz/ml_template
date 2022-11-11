@@ -16,6 +16,7 @@ from datetime import datetime
 import os
 import importlib
 from utils.logger import Logger
+import shutil
 
 class Executor():
     
@@ -36,6 +37,7 @@ class Executor():
         if 'prod' in self.config.keys():
             self.logger.log('Configurando S3 client')
             self.prod = self.config['prod']
+            self.prod_remote_path = self.prod['params']['remote_path']
             self._config_prod()
         
     def _config_prod(self):
@@ -66,7 +68,8 @@ class Executor():
         
         if self.prod:      
             
-            self.prod['params']['remote_path'] += self.model_name+'/{path}/{model_name}_{current_date}.pkl'.format(path=path,
+            self.prod['params']['remote_path'] = self.prod_remote_path + \
+                                                    self.model_name+'/{path}/{model_name}_{current_date}.pkl'.format(path=path,
                                                                       model_name=self.model_name,
                                                                       current_date=current_date)
             self.prod['params']['local_path'] = '{path}/{model_name}_{current_date}.pkl'.format(path=path,
@@ -142,6 +145,27 @@ class Executor():
 
         pipe.transform(test_X)
         train.report(test_y,'train_results/')
+        
+        if self.prod:      
+        
+            current_date = datetime.now().strftime('%Y%m%d%H%M%S')
+            path = 'train_results'
+            shutil.make_archive(path, 'zip', path)
+            
+            self.prod['params']['remote_path'] = self.prod_remote_path + self.model_name+\
+                                                '/{path}/{safra}/{model_name}_{current_date}.zip'\
+                                                    .format(path=path,
+                                                              safra=self.safra,              
+                                                              model_name=self.model_name,
+                                                              current_date=current_date)
+            self.prod['params']['local_path'] = '{path}.zip'.format(path=path,
+                                                                      model_name=self.model_name,
+                                                                      current_date=current_date)
+            
+            self.logger.log('Carregando pickle de S3')
+            self.prod_obj = self.prod_mod(**self.prod['params'])
+            
+            self.prod_obj.write()
             
 
     def _score(self,fname,etl):
