@@ -10,6 +10,7 @@ from utils import date_utils as du
 from utils.logger import Logger
 from datetime import datetime
 from io_ml.io_parquet import IOParquet
+from io_ml import io_metadata
 
 class Scorer():
 
@@ -21,6 +22,7 @@ class Scorer():
             self.config = yaml.load(fp, Loader = SafeLoader)
             
         self.logger = Logger(self)
+        self.metadata = io_metadata.IOMetadata()
         self.logger.log('Inicializando processo de escoragem')
         
         self.model_name = self.config['model_name']
@@ -119,7 +121,7 @@ class Scorer():
             
         res['SAFRA'] = datetime.strptime(du.DateUtils.add(self.safra,1),'%Y%m')
         res['MODEL_NAME'] = self.model_name
-        res['DT_EXEC'] = datetime.now().strftime('%Y%m%d%H%M%S')
+        res['DT_EXEC'] = self.metadata.metadata['executor']['score_timestamp']
         res['CUS_CUST_ID'] = res['CUS_CUST_ID'].astype(pd.Int64Dtype())
         
         self.logger.log('Score types:\n{}'.format(res.dtypes))      

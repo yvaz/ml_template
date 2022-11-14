@@ -13,14 +13,18 @@ from utils import date_utils as du
 from matplotlib import pyplot as plt
 from datetime import datetime
 import decimal
+from io_ml import io_metadata
 
 class Evaluer():
 
+    
+    
     def __init__(self,
                  safra: int,
                  config: str = os.path.dirname(__file__)+"/main_cfg.yaml"):
 
         self.logger = Logger(self)
+        self.metadata = io_metadata.IOMetadata()
         
         with open(config,'r') as fp:
             self.config = yaml.load(fp, Loader = SafeLoader)
@@ -61,7 +65,7 @@ class Evaluer():
             safra = du.DateUtils.add(self.safra,1)
             safra_fmt = datetime.strptime(safra,'%Y%m').strftime('%Y-%m-%d')
             query = """
-                        SELECT CUS_CUST_ID,SCORES_0,SCORES_1,DECIL
+                        SELECT CUS_CUST_ID,SCORES_0,SCORES_1,DECIL,DT_EXEC
                         FROM {tb_name}
                         WHERE MODEL_NAME='{model_name}'
                         AND SAFRA='{safra}'
@@ -110,7 +114,7 @@ class Evaluer():
         conv['CONVERSAO_PERC'] = (conv['Positives']/(conv['Positives'].sum())*100).apply(context.create_decimal_from_float)
         conv['KS'] = conversion['KS'].apply(context.create_decimal_from_float)
         conv['SAFRA'] = datetime.strptime(du.DateUtils.add(self.safra,1),'%Y%m')
-        conv['DT_EXEC'] = datetime.now().strftime('%Y%m%d%H%M%S')
+        conv['DT_EXEC'] = self.preds['DT_EXEC']
         
         conv = pd.concat(
             [pd.DataFrame(self.model_name,index=range(conv.shape[0]),columns=['MODEL_NAME'])\

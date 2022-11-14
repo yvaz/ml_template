@@ -17,8 +17,11 @@ import os
 import importlib
 from utils.logger import Logger
 import shutil
+from io_ml import io_metadata
 
 class Executor():
+    
+    metadata_key = 'executor'
     
     def __init__(self,config,flow_type,safra):
         
@@ -26,6 +29,7 @@ class Executor():
             self.config = yaml.load(fp, Loader = SafeLoader)
 
         self.logger = Logger(self)
+        self.metadata = io_metadata.IOMetadata()
         self.model_name = self.config['model_name']
         self.train_test_sample = self.config['train_test_sample']
         self.persist = self.config['persist']
@@ -47,8 +51,8 @@ class Executor():
         
     def write_pickle(self,pipe):
         
-        current_date = datetime.now().strftime('%Y%m%d%H%M%S')
         path = 'registries/pkl_{safra}'.format(safra=self.safra)
+        current_date = self.metadata.metadata['executor']['train_timestamp']
         
         if exists(path):
                     
@@ -116,6 +120,13 @@ class Executor():
         
     def _train(self,fname,etl):
             
+        current_date = datetime.now().strftime('%Y%m%d%H%M%S')
+        meta = [
+                  {'train_timestamp':current_date}
+                ]
+        self.metadata.meta_by_list(self.metadata_key,meta)
+        self.metadata.write()
+            
         prep = prepp.PrepPipe()
         train = trainp.TrainPipe()
         pipe = Pipeline([('prep',prep),('train',train)])  
@@ -148,7 +159,6 @@ class Executor():
         
         if self.prod:      
         
-            current_date = datetime.now().strftime('%Y%m%d%H%M%S')
             path = 'train_results'
             shutil.make_archive(path, 'zip', path)
             
@@ -169,6 +179,12 @@ class Executor():
             
 
     def _score(self,fname,etl):
+            
+        meta = [
+                  {'score_timestamp':datetime.now().strftime('%Y%m%d%H%M%S')}
+                ]
+        self.metadata.meta_by_list(self.metadata_key,meta)
+        self.metadata.write()
 
         # PREPARANDO PIPELINE
         score = scorep.Scorer(safra=self.safra)

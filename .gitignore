@@ -1,0 +1,13 @@
+*.yaml
+*.yml
+train_results
+*.txt
+*.log
+*.sh
+*.ipynb
+*.zip
+registries
+evaluation
+inputs
+*.png
+.ipynb_checkpoints
