@@ -18,38 +18,25 @@ import importlib
 from utils.logger import Logger
 import shutil
 from io_ml import io_metadata
+from engine.main_cfg import MainCFG
 
 class Executor():
     
     metadata_key = 'executor'
     
-    def __init__(self,config,flow_type,safra):
+    def __init__(self,flow_type: str
+                     ,safra: int
+                     ,config: str = os.path.dirname(__file__)+"/main_cfg.yaml"):
         
-        with open(config,'r') as fp:
-            self.config = yaml.load(fp, Loader = SafeLoader)
-
+        
+        self.main_cfg = MainCFG(config)
         self.logger = Logger(self)
         self.metadata = io_metadata.IOMetadata()
-        self.model_name = self.config['model_name']
-        self.train_test_sample = self.config['train_test_sample']
-        self.persist = self.config['persist']
         self.flow_type = flow_type
         self.safra = safra
         
-        self.prod = None
-        
-        if 'prod' in self.config.keys():
-            self.logger.log('Configurando S3 client')
-            self.prod = self.config['prod']
-            self.prod_remote_path = self.prod['params']['remote_path']
-            self._config_prod()
-        
-    def _config_prod(self):
-        
-        prod_pack = importlib.import_module(self.prod['package'])
-        self.prod_mod = getattr(prod_pack,self.prod['module'])
-        
-    def write_pickle(self,pipe):
+    def write_pickle(self
+                     ,pipe: Pipeline):
         
         path = 'registries/pkl_{safra}'.format(safra=self.safra)
         current_date = self.metadata.metadata['executor']['train_timestamp']
@@ -57,7 +44,7 @@ class Executor():
         if exists(path):
                     
             with open('{path}/{model_name}_{current_date}.pkl'.format(path=path,
-                                                                      model_name=self.model_name,
+                                                                      model_name=self.main_cfg.model_name,
                                                                       current_date=current_date),'wb') as fp:
                 pickle.dump(pipe,fp)
         
@@ -66,25 +53,27 @@ class Executor():
             os.system('mkdir {path}'.format(path=path))
 
             with open('{path}/{model_name}_{current_date}.pkl'.format(path=path,
-                                                                  model_name=self.model_name,
+                                                                  model_name=self.main_cfg.model_name,
                                                                   current_date=current_date),'wb') as fp:
                 pickle.dump(pipe,fp)
         
-        if self.prod:      
+        if self.main_cfg.prod:      
             
-            self.prod['params']['remote_path'] = self.prod_remote_path + \
-                                                    self.model_name+'/{path}/{model_name}_{current_date}.pkl'.format(path=path,
-                                                                      model_name=self.model_name,
-                                                                      current_date=current_date)
-            self.prod['params']['local_path'] = '{path}/{model_name}_{current_date}.pkl'.format(path=path,
-                                                                      model_name=self.model_name,
-                                                                      current_date=current_date)
+            self.main_cfg.prod['params']['remote_path'] = self.main_cfg.prod_remote_path + \
+                                                          self.main_cfg.model_name+'/{path}/{model_name}_{current_date}.pkl'\
+                                                                    .format(path=path,
+                                                                            model_name=self.main_cfg.model_name,
+                                                                            current_date=current_date)
+            
+            self.main_cfg.prod['params']['local_path'] = '{path}/{model_name}_{current_date}.pkl'\
+                                                                    .format(path=path,
+                                                                            model_name=self.main_cfg.model_name,
+                                                                            current_date=current_date)
             
             self.logger.log('Carregando pickle de S3')
-            self.prod_obj = self.prod_mod(**self.prod['params'])
+            self.prod_obj = self.main_cfg.prod_mod(**self.main_cfg.prod['params'])
             
             self.prod_obj.write()
-            
     
     def execute(self):
         
@@ -107,14 +96,14 @@ class Executor():
             fname = 'eval_dataset.parquet'
 
         # PREPARANDO PIPELINE
-        if self.persist == 'while_execution' or self.persist == 'always':
+        if self.main_cfg.persist == 'while_execution' or self.main_cfg.persist == 'always':
             etl = etlp.ETL(self.safra,persist=True,flow=flow)
         else:
             etl = etlp.ETL(self.safra,persist=False,flow=flow)
             
         func(fname,etl)
                
-        if self.persist == 'while_execution':
+        if self.main_cfg.persist == 'while_execution':
             os.system('rm -f registries/'+fname)
         
         
@@ -137,14 +126,14 @@ class Executor():
             y = dset['target']
             X = dset.drop('target',axis=1)
             train_X, test_X, train_y, test_y = train_test_split(X, y, 
-                                                test_size=self.train_test_sample,
+                                                test_size=self.main_cfg.train_test_sample,
                                                 random_state=42)
         else:       
             #EXECUTANDO ETL DE TREINAMENTO
             etl.setup()
             X,y = etl.extract()
             train_X, test_X, train_y, test_y = train_test_split(X, y, 
-                                                test_size=self.train_test_sample,
+                                                test_size=self.main_cfg.train_test_sample,
                                                 random_state=42)
 
         pipe.fit(train_X,train_y)
@@ -157,23 +146,23 @@ class Executor():
         pipe.transform(test_X)
         train.report(test_y,'train_results/')
         
-        if self.prod:      
+        if self.main_cfg.prod:      
         
             path = 'train_results'
             shutil.make_archive(path, 'zip', path)
             
-            self.prod['params']['remote_path'] = self.prod_remote_path + self.model_name+\
+            self.main_cfg.prod['params']['remote_path'] = self.main_cfg.prod_remote_path + self.main_cfg.model_name+\
                                                 '/{path}/{safra}/{model_name}_{current_date}.zip'\
                                                     .format(path=path,
                                                               safra=self.safra,              
-                                                              model_name=self.model_name,
+                                                              model_name=self.main_cfg.model_name,
                                                               current_date=current_date)
-            self.prod['params']['local_path'] = '{path}.zip'.format(path=path,
-                                                                      model_name=self.model_name,
+            self.main_cfg.prod['params']['local_path'] = '{path}.zip'.format(path=path,
+                                                                      model_name=self.main_cfg.model_name,
                                                                       current_date=current_date)
             
             self.logger.log('Carregando pickle de S3')
-            self.prod_obj = self.prod_mod(**self.prod['params'])
+            self.prod_obj = self.main_cfg.prod_mod(**self.main_cfg.prod['params'])
             
             self.prod_obj.write()
             
@@ -224,7 +213,7 @@ def main(argv):
     flow_type = args[1]
     safra = args[2]
 
-    exc = Executor(config,flow_type,safra)
+    exc = Executor(flow_type,safra,config)
     exc.execute()
 
 if __name__ == '__main__':
