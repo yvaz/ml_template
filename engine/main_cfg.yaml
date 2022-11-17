@@ -20,4 +20,9 @@ prod:
     sec_key_name: SECRET_SECRET_S3_SECRET_KEY
     remote_path: prod/meliextra/modelo/opf/
     bucket: analytics.data.ml
-  
+champ_challenger:
+  tolerance_champ: 3
+  tb_name: meli-bi-data.ML_TBL.TB_CHAMP_CHALLENGER
+  persist_method: 
+    package: io_ml.io_bq
+    module: IO_BQ
