@@ -10,37 +10,21 @@ from utils import date_utils as du
 from utils.logger import Logger
 from datetime import datetime
 from io_ml.io_parquet import IOParquet
+from io_ml.io_bq import IO_BQ
+from io_ml import io_metadata
+from engine.main_cfg import MainCFG
 
 class Scorer():
 
     def __init__(self,
                  safra: int,
                  config: str = os.path.dirname(__file__)+"/main_cfg.yaml"):
-
-        with open(config,'r') as fp:
-            self.config = yaml.load(fp, Loader = SafeLoader)
             
+        self.main_cfg = MainCFG(config)
         self.logger = Logger(self)
+        self.metadata = io_metadata.IOMetadata()
         self.logger.log('Inicializando processo de escoragem')
-        
-        self.model_name = self.config['model_name']
-        self.persist_package = self.config['score']['persist_method']['package']
-        self.persist_module = self.config['score']['persist_method']['module']
-        
-        self.persist_params = {}
-        
-        if 'params' in self.config['score']['persist_method'].keys():
-            self.persist_params = self.config['score']['persist_method']['params']
-            
-        self.persist_params['tb_name'] = self.config['score']['tb_name']
-        self.model_name = self.config['model_name']
         self.safra = safra
-        
-        self.prod = None
-        if 'prod' in self.config.keys():
-            self.prod = self.config['prod']      
-            prod_pack = importlib.import_module(self.prod['package'])
-            self.prod_mod = getattr(prod_pack,self.prod['module'])
         
     def get_last_trained_safra(self):
         
@@ -65,36 +49,59 @@ class Scorer():
         safras = safras[safras <= int(self.safra)]
         
         return max(safras)
-        
-        
 
+    def _load_champ_challenger(self):
+        
+        io_bq = IO_BQ(self.main_cfg.persist_params_champ['tb_name'])
+        
+        query = """SELECT SAFRA,DT_TRAIN,METRIC BEST_METRIC FROM 
+                   {tb_name}
+                   WHERE SAFRA <= PARSE_DATE('%Y%m','{safra}')
+                   AND MODEL_NAME='{model_name}'
+                   ORDER BY METRIC DESC"""\
+                .format(tb_name=self.main_cfg.persist_params_champ['tb_name'],
+                        safra=self.safra,
+                        model_name=self.main_cfg.model_name)
+        
+        best_model = io_bq.read(query).loc[0]
+        
+        return best_model['SAFRA'].strftime('%Y%m'),best_model['DT_TRAIN']
+    
     def load_model(self):
         
         self.logger.log('Carregando modelo para escoragem')     
         
-        if self.prod: 
+        if self.main_cfg.prod: 
             self.logger.log('Carregando pickle de S3')
-            self.prod['params']['remote_path'] += self.model_name+'/registries/'
-            self.prod['params']['local_path'] = './registries_tmp'
-            self.prod_obj = self.prod_mod(**self.prod['params'])
+            self.main_cfg.prod['params']['remote_path'] += self.main_cfg.model_name+'/registries/'
+            self.main_cfg.prod['params']['local_path'] = './registries_tmp'
+            self.prod_obj = self.main_cfg.prod_mod(**self.main_cfg.prod['params'])
             self.prod_obj.read_folder()
             os.system('rm -rf ./registries/pkl_*')
             os.system('mv ./registries_tmp/pkl_* ./registries/')
             os.system('rm -rf ./registries_tmp')
         
-        safra_alvo = self.get_last_trained_safra()
-        
-        path = 'registries/pkl_{safra}/'.format(safra=safra_alvo)
-        
-        list_of_files = sorted(
-                            filter(
-                                lambda x: os.path.isfile(os.path.join(path, x)),
-                                os.listdir(path)
+        if not self.main_cfg.champ_challenger:
+            self.train_safra = self.get_last_trained_safra()
+
+            path = 'registries/pkl_{safra}/'.format(safra=self.train_safra)
+
+            list_of_files = sorted(
+                                filter(
+                                    lambda x: os.path.isfile(os.path.join(path, x)),
+                                    os.listdir(path)
+                                )
                             )
-                        )
-        
-        last_pickle = list_of_files[-1]
-        
+
+            last_pickle = list_of_files[-1]
+            pickle_suf = re.findall(r'[0-9]+\.pkl',last_pickle)[0]
+            self.train_dt = pickle_suf.replace('.pkl','')
+        else:
+            self.train_safra,self.train_dt = self._load_champ_challenger()
+            path = 'registries/pkl_{safra}/'.format(safra=self.train_safra)
+            last_pickle = self.main_cfg.model_name+'_'+str(self.train_dt)+'.pkl'
+            
+        self.logger.log('Train date: {train_dt}'.format(train_dt=self.train_dt))
         self.logger.log('Pickle utilizado: {path}{last_pickle}'.format(path=path,last_pickle=last_pickle))
         
         with open(path+last_pickle,'rb') as fp:
@@ -114,18 +121,18 @@ class Scorer():
         res['SCORES_0'] = (res['PR_0'].astype('Float64')*10000).astype('Int64')
         res['SCORES_1'] = (res['PR_1'].astype('Float64')*10000).astype('Int64')
                                  
-        mod = importlib.import_module(self.persist_package)
-        io = getattr(mod,self.persist_module)    
+        io = self.main_cfg.config_mod(self.main_cfg.persist_method_score)
             
         res['SAFRA'] = datetime.strptime(du.DateUtils.add(self.safra,1),'%Y%m')
-        res['MODEL_NAME'] = self.model_name
+        res['MODEL_NAME'] = self.main_cfg.model_name
         res['DT_EXEC'] = datetime.now().strftime('%Y%m%d%H%M%S')
+        res['DT_TRAIN'] = self.train_dt
         res['CUS_CUST_ID'] = res['CUS_CUST_ID'].astype(pd.Int64Dtype())
         
         self.logger.log('Score types:\n{}'.format(res.dtypes))      
         nulos = res.isnull().sum()
         self.logger.log('Nulos:\n{}'.format(nulos))
         
-        io_c = io(**self.persist_params)
-        io_c.write(res[['MODEL_NAME','CUS_CUST_ID','DECIL','SCORES_0','SCORES_1','SAFRA','DT_EXEC']])
+        io_c = io(**self.main_cfg.persist_params_score)
+        io_c.write(res[['MODEL_NAME','CUS_CUST_ID','DECIL','SCORES_0','SCORES_1','SAFRA','DT_EXEC','DT_TRAIN']])
 

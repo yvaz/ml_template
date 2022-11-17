@@ -12,48 +12,40 @@ from sklearn.model_selection import train_test_split
 from os.path import exists
 import pandas as pd
 from io_ml.io_parquet import IOParquet
+from io_ml.io_bq import IO_BQ
 from datetime import datetime
 import os
 import importlib
 from utils.logger import Logger
 import shutil
+from io_ml import io_metadata
+from engine.main_cfg import MainCFG
 
 class Executor():
     
-    def __init__(self,config,flow_type,safra):
+    metadata_key = 'executor'
+    
+    def __init__(self,flow_type: str
+                     ,safra: int
+                     ,config: str = os.path.dirname(__file__)+"/main_cfg.yaml"):
         
-        with open(config,'r') as fp:
-            self.config = yaml.load(fp, Loader = SafeLoader)
-
+        
+        self.main_cfg = MainCFG(config)
         self.logger = Logger(self)
-        self.model_name = self.config['model_name']
-        self.train_test_sample = self.config['train_test_sample']
-        self.persist = self.config['persist']
+        self.metadata = io_metadata.IOMetadata()
         self.flow_type = flow_type
         self.safra = safra
         
-        self.prod = None
+    def write_pickle(self
+                     ,pipe: Pipeline):
         
-        if 'prod' in self.config.keys():
-            self.logger.log('Configurando S3 client')
-            self.prod = self.config['prod']
-            self.prod_remote_path = self.prod['params']['remote_path']
-            self._config_prod()
-        
-    def _config_prod(self):
-        
-        prod_pack = importlib.import_module(self.prod['package'])
-        self.prod_mod = getattr(prod_pack,self.prod['module'])
-        
-    def write_pickle(self,pipe):
-        
-        current_date = datetime.now().strftime('%Y%m%d%H%M%S')
         path = 'registries/pkl_{safra}'.format(safra=self.safra)
+        current_date = self.metadata.metadata['executor']['train_timestamp']
         
         if exists(path):
                     
             with open('{path}/{model_name}_{current_date}.pkl'.format(path=path,
-                                                                      model_name=self.model_name,
+                                                                      model_name=self.main_cfg.model_name,
                                                                       current_date=current_date),'wb') as fp:
                 pickle.dump(pipe,fp)
         
@@ -62,25 +54,27 @@ class Executor():
             os.system('mkdir {path}'.format(path=path))
 
             with open('{path}/{model_name}_{current_date}.pkl'.format(path=path,
-                                                                  model_name=self.model_name,
+                                                                  model_name=self.main_cfg.model_name,
                                                                   current_date=current_date),'wb') as fp:
                 pickle.dump(pipe,fp)
         
-        if self.prod:      
+        if self.main_cfg.prod:      
             
-            self.prod['params']['remote_path'] = self.prod_remote_path + \
-                                                    self.model_name+'/{path}/{model_name}_{current_date}.pkl'.format(path=path,
-                                                                      model_name=self.model_name,
-                                                                      current_date=current_date)
-            self.prod['params']['local_path'] = '{path}/{model_name}_{current_date}.pkl'.format(path=path,
-                                                                      model_name=self.model_name,
-                                                                      current_date=current_date)
+            self.main_cfg.prod['params']['remote_path'] = self.main_cfg.prod_remote_path + \
+                                                          self.main_cfg.model_name+'/{path}/{model_name}_{current_date}.pkl'\
+                                                                    .format(path=path,
+                                                                            model_name=self.main_cfg.model_name,
+                                                                            current_date=current_date)
+            
+            self.main_cfg.prod['params']['local_path'] = '{path}/{model_name}_{current_date}.pkl'\
+                                                                    .format(path=path,
+                                                                            model_name=self.main_cfg.model_name,
+                                                                            current_date=current_date)
             
             self.logger.log('Carregando pickle de S3')
-            self.prod_obj = self.prod_mod(**self.prod['params'])
+            self.prod_obj = self.main_cfg.prod_mod(**self.main_cfg.prod['params'])
             
             self.prod_obj.write()
-            
     
     def execute(self):
         
@@ -103,18 +97,25 @@ class Executor():
             fname = 'eval_dataset.parquet'
 
         # PREPARANDO PIPELINE
-        if self.persist == 'while_execution' or self.persist == 'always':
+        if self.main_cfg.persist == 'while_execution' or self.main_cfg.persist == 'always':
             etl = etlp.ETL(self.safra,persist=True,flow=flow)
         else:
             etl = etlp.ETL(self.safra,persist=False,flow=flow)
             
         func(fname,etl)
                
-        if self.persist == 'while_execution':
+        if self.main_cfg.persist == 'while_execution':
             os.system('rm -f registries/'+fname)
         
         
     def _train(self,fname,etl):
+            
+        current_date = datetime.now().strftime('%Y%m%d%H%M%S')
+        meta = [
+                  {'train_timestamp':current_date}
+                ]
+        self.metadata.meta_by_list(self.metadata_key,meta)
+        self.metadata.write()
             
         prep = prepp.PrepPipe()
         train = trainp.TrainPipe()
@@ -126,14 +127,14 @@ class Executor():
             y = dset['target']
             X = dset.drop('target',axis=1)
             train_X, test_X, train_y, test_y = train_test_split(X, y, 
-                                                test_size=self.train_test_sample,
+                                                test_size=self.main_cfg.train_test_sample,
                                                 random_state=42)
         else:       
             #EXECUTANDO ETL DE TREINAMENTO
             etl.setup()
             X,y = etl.extract()
             train_X, test_X, train_y, test_y = train_test_split(X, y, 
-                                                test_size=self.train_test_sample,
+                                                test_size=self.main_cfg.train_test_sample,
                                                 random_state=42)
 
         pipe.fit(train_X,train_y)
@@ -143,32 +144,82 @@ class Executor():
         
         self.write_pickle(pipe)
 
-        pipe.transform(test_X)
+        _,proba = pipe.transform(test_X)
         train.report(test_y,'train_results/')
         
-        if self.prod:      
+        if self.main_cfg.prod:      
         
-            current_date = datetime.now().strftime('%Y%m%d%H%M%S')
             path = 'train_results'
             shutil.make_archive(path, 'zip', path)
             
-            self.prod['params']['remote_path'] = self.prod_remote_path + self.model_name+\
+            self.main_cfg.prod['params']['remote_path'] = self.main_cfg.prod_remote_path + self.main_cfg.model_name+\
                                                 '/{path}/{safra}/{model_name}_{current_date}.zip'\
                                                     .format(path=path,
                                                               safra=self.safra,              
-                                                              model_name=self.model_name,
+                                                              model_name=self.main_cfg.model_name,
                                                               current_date=current_date)
-            self.prod['params']['local_path'] = '{path}.zip'.format(path=path,
-                                                                      model_name=self.model_name,
+            self.main_cfg.prod['params']['local_path'] = '{path}.zip'.format(path=path,
+                                                                      model_name=self.main_cfg.model_name,
                                                                       current_date=current_date)
             
             self.logger.log('Carregando pickle de S3')
-            self.prod_obj = self.prod_mod(**self.prod['params'])
+            self.prod_obj = self.main_cfg.prod_mod(**self.main_cfg.prod['params'])
             
             self.prod_obj.write()
             
+        if self.main_cfg.champ_challenger:
+            
+            self._train_champ_challenger()
+            
+    def _train_champ_challenger(self):
+        
+        path = 'train_results/metric.csv'
+        roc_auc = int(float(pd.read_csv(path).iloc[0,0])*100)
+        
+        self.logger.log("ROC AUC do modelo atual: {roc_auc}".format(roc_auc=roc_auc))
+        
+        io_bq = IO_BQ(self.main_cfg.persist_params_champ['tb_name'])
+        
+        query = """SELECT SAFRA,DT_TRAIN,METRIC BEST_METRIC FROM 
+                   {tb_name}
+                   WHERE SAFRA <= PARSE_DATE('%Y%m','{safra}')
+                   AND MODEL_NAME='{model_name}'
+                   ORDER BY METRIC DESC
+                   """\
+                .format(tb_name=self.main_cfg.persist_params_champ['tb_name'],
+                        safra=self.safra,
+                        model_name=self.main_cfg.model_name)
+        
+        best_model = io_bq.read(query).loc[0]
+        candidate = pd.DataFrame([[self.main_cfg.model_name,
+                              self.metadata.metadata['executor']['train_timestamp'],
+                              roc_auc,
+                              datetime.strptime(self.safra,'%Y%m')
+                             ]],columns=['MODEL_NAME','DT_TRAIN','METRIC','SAFRA'])
+        
+        self.logger.log("BEST METRIC ON {tb_name}".format(tb_name=self.main_cfg.persist_params_champ['tb_name']))
+        self.logger.log(best_model)
+        self.logger.log(best_model.shape[0])
+        
+        if best_model.shape[0] == 0:
+            io_bq.write(candidate)
+        else:
+            self.logger.log('COMPARANDO METRICA ATUAL: {roc_atual}+{tol} >= {roc_best}: MELHOR METRICA'\
+                                .format(roc_atual=roc_auc,
+                                        tol=self.main_cfg.tolerance_champ,
+                                        roc_best=best_model['BEST_METRIC']))
+            if roc_auc + self.main_cfg.tolerance_champ >= best_model['BEST_METRIC']:
+                io_bq.write(candidate)
+        
+        
 
     def _score(self,fname,etl):
+            
+        meta = [
+                  {'score_timestamp':datetime.now().strftime('%Y%m%d%H%M%S')}
+                ]
+        self.metadata.meta_by_list(self.metadata_key,meta)
+        self.metadata.write()
 
         # PREPARANDO PIPELINE
         score = scorep.Scorer(safra=self.safra)
@@ -208,7 +259,7 @@ def main(argv):
     flow_type = args[1]
     safra = args[2]
 
-    exc = Executor(config,flow_type,safra)
+    exc = Executor(flow_type,safra,config)
     exc.execute()
 
 if __name__ == '__main__':

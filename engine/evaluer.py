@@ -13,55 +13,35 @@ from utils import date_utils as du
 from matplotlib import pyplot as plt
 from datetime import datetime
 import decimal
+from io_ml import io_metadata
+from engine.main_cfg import MainCFG
 
 class Evaluer():
-
+    
     def __init__(self,
                  safra: int,
                  config: str = os.path.dirname(__file__)+"/main_cfg.yaml"):
 
         self.logger = Logger(self)
-        
-        with open(config,'r') as fp:
-            self.config = yaml.load(fp, Loader = SafeLoader)
-                 
+        self.metadata = io_metadata.IOMetadata()
+        self.main_cfg = MainCFG(config)
+        self.config = self.main_cfg.config
         self.safra = safra
-        self.model_name = self.config['model_name']  
-        
-        self.persist_package_score = self.config['score']['persist_method']['package']
-        self.persist_module_score = self.config['score']['persist_method']['module']
-        
-        if 'params' in self.config['score']['persist_method'].keys():
-            self.persist_params_score = self.config['score']['persist_method']['params']
-        else:
-            self.persist_params_score = {}
-            
-        self.persist_params_score['tb_name'] = self.config['score']['tb_name']
-        
-        self.persist_package_eval = self.config['eval']['persist_method']['package']
-        self.persist_module_eval = self.config['eval']['persist_method']['module']
-        
-        if 'params' in self.config['eval']['persist_method'].keys():
-            self.persist_params_eval = self.config['eval']['persist_method']['params']
-        else:
-            self.persist_params_eval = {}
-            
-        self.persist_params_eval['tb_name'] = self.config['eval']['tb_name']
         
 
     def load_score(self):
         
-        mod = importlib.import_module(self.persist_package_score)
-        io = getattr(mod,self.persist_module_score)    
+        mod = importlib.import_module(self.main_cfg.persist_package_score)
+        io = getattr(mod,self.main_cfg.persist_module_score)    
             
-        io_c = io(**self.persist_params_score)
+        io_c = io(**self.main_cfg.persist_params_score)
         
-        if self.persist_package_score == 'io_ml.io_bq':
+        if self.main_cfg.persist_package_score == 'io_ml.io_bq':
             
             safra = du.DateUtils.add(self.safra,1)
             safra_fmt = datetime.strptime(safra,'%Y%m').strftime('%Y-%m-%d')
             query = """
-                        SELECT CUS_CUST_ID,SCORES_0,SCORES_1,DECIL
+                        SELECT CUS_CUST_ID,SCORES_0,SCORES_1,DECIL,DT_EXEC,DT_TRAIN
                         FROM {tb_name}
                         WHERE MODEL_NAME='{model_name}'
                         AND SAFRA='{safra}'
@@ -70,9 +50,9 @@ class Evaluer():
                                     WHERE MODEL_NAME='{model_name}'
                                     AND SAFRA='{safra}'
                                     )
-                    """.format(tb_name=self.persist_params_score['tb_name'],
+                    """.format(tb_name=self.main_cfg.persist_params_score['tb_name'],
                                safra=safra_fmt,
-                               model_name=self.model_name)
+                               model_name=self.main_cfg.model_name)
             
             self.preds = io_c.read(query)
         else:
@@ -97,8 +77,7 @@ class Evaluer():
         conversion = rc.ResultsCollection.lift(eval_base['target'],eval_base[['SCORES_0','SCORES_1']],10)
         conversion.to_csv(path+'conversion_report.csv')
                                  
-        mod = importlib.import_module(self.persist_package_eval)
-        io = getattr(mod,self.persist_module_eval)      
+        io = self.main_cfg.config_mod(self.main_cfg.persist_method_eval)
         
         context = decimal.Context(prec=7)
         
@@ -111,9 +90,10 @@ class Evaluer():
         conv['KS'] = conversion['KS'].apply(context.create_decimal_from_float)
         conv['SAFRA'] = datetime.strptime(du.DateUtils.add(self.safra,1),'%Y%m')
         conv['DT_EXEC'] = datetime.now().strftime('%Y%m%d%H%M%S')
+        conv['DT_TRAIN'] = self.preds['DT_TRAIN']
         
         conv = pd.concat(
-            [pd.DataFrame(self.model_name,index=range(conv.shape[0]),columns=['MODEL_NAME'])\
+            [pd.DataFrame(self.main_cfg.model_name,index=range(conv.shape[0]),columns=['MODEL_NAME'])\
                  .reset_index(drop=True)
              ,conv],
             axis=1
@@ -121,13 +101,13 @@ class Evaluer():
         
         self.logger.log(conv.columns)
         
-        
         conv.columns = ['MODEL_NAME','DECIL','PUBLICO','CONVERSAO','RESP_RATE',
                               'LIFT','CONVERSAO_ACC','CONVERSAO_PERC','KS',
-                              'SAFRA','DT_EXEC']
+                              'SAFRA','DT_EXEC','DT_TRAIN']
+        self.logger.log(conv)
         
-        io_c = io(**self.persist_params_eval)
-        self.preds = io_c.write(conv)
+        io_c = io(**self.main_cfg.persist_params_eval)
+        io_c.write(conv)
         
         
 
