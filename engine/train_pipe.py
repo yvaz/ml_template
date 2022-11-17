@@ -10,6 +10,7 @@ import numpy as np
 import optuna
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
+from sklearn.metrics import roc_curve, auc
 from sklearn.calibration import calibration_curve
 from sklearn.calibration import CalibratedClassifierCV
 from imblearn.under_sampling import RandomUnderSampler
@@ -230,6 +231,13 @@ class TrainPipe(BaseEstimator, TransformerMixin):
             pc.PlotsCollection.roc_curve_plot(proba[:,1],y)
             plt.savefig(path+'roc_curve.png')
             plt.close()
+            
+            self.logger.log('Produzindo resultado ROC AUC')
+            fpr, tpr, _ = roc_curve(y, proba[:,1])
+            ras = auc(fpr, tpr)
+            result = pd.DataFrame([ras])
+            result.to_csv(path+'metric.csv',index=False)
+            self.logger.log('-- {ras}'.format(ras=ras))
             
             self.logger.log('Produzindo gráfico de targets')
             pc.PlotsCollection.targets_plot(proba[:,1],y)

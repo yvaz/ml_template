@@ -19,11 +19,11 @@ class IO_BQ(IO_ML):
     
     def read(self,query):
         
-        self.logger.log('QUERY READ: {query}'.format(query=query))
+        self.logger.log('QUERY READ: \n{query}'.format(query=query))
         
         df = self.bigquery.execute_response(query,output='df')
         
-        self.logger.log('DF: {df}'.format(df=df))
+        self.logger.log('DF:\n{df}'.format(df=df))
         self.logger.log('DF COLS: {cols}'.format(cols=df.columns))
         
         return df
@@ -31,5 +31,6 @@ class IO_BQ(IO_ML):
     def write(self,data):      
         
         data.to_csv('data_tmp.csv',index=False, header=False)
+        self.logger.log('Adding data to table {tb_name}'.format(tb_name=self.tb_name))
         self.bigquery.fast_load('data_tmp.csv','{tb_name}'.format(tb_name=self.tb_name))
         os.system('rm -f data_tmp.csv')

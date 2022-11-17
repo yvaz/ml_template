@@ -10,6 +10,7 @@ from utils import date_utils as du
 from utils.logger import Logger
 from datetime import datetime
 from io_ml.io_parquet import IOParquet
+from io_ml.io_bq import IO_BQ
 from io_ml import io_metadata
 from engine.main_cfg import MainCFG
 
@@ -49,6 +50,23 @@ class Scorer():
         
         return max(safras)
 
+    def _load_champ_challenger(self):
+        
+        io_bq = IO_BQ(self.main_cfg.persist_params_champ['tb_name'])
+        
+        query = """SELECT SAFRA,DT_TRAIN,METRIC BEST_METRIC FROM 
+                   {tb_name}
+                   WHERE SAFRA <= PARSE_DATE('%Y%m','{safra}')
+                   AND MODEL_NAME='{model_name}'
+                   ORDER BY METRIC DESC"""\
+                .format(tb_name=self.main_cfg.persist_params_champ['tb_name'],
+                        safra=self.safra,
+                        model_name=self.main_cfg.model_name)
+        
+        best_model = io_bq.read(query).loc[0]
+        
+        return best_model['SAFRA'].strftime('%Y%m'),best_model['DT_TRAIN']
+    
     def load_model(self):
         
         self.logger.log('Carregando modelo para escoragem')     
@@ -63,19 +81,27 @@ class Scorer():
             os.system('mv ./registries_tmp/pkl_* ./registries/')
             os.system('rm -rf ./registries_tmp')
         
-        safra_alvo = self.get_last_trained_safra()
-        
-        path = 'registries/pkl_{safra}/'.format(safra=safra_alvo)
-        
-        list_of_files = sorted(
-                            filter(
-                                lambda x: os.path.isfile(os.path.join(path, x)),
-                                os.listdir(path)
+        if not self.main_cfg.champ_challenger:
+            self.train_safra = self.get_last_trained_safra()
+
+            path = 'registries/pkl_{safra}/'.format(safra=self.train_safra)
+
+            list_of_files = sorted(
+                                filter(
+                                    lambda x: os.path.isfile(os.path.join(path, x)),
+                                    os.listdir(path)
+                                )
                             )
-                        )
-        
-        last_pickle = list_of_files[-1]
-        
+
+            last_pickle = list_of_files[-1]
+            pickle_suf = re.findall(r'[0-9]+\.pkl',last_pickle)[0]
+            self.train_dt = pickle_suf.replace('.pkl','')
+        else:
+            self.train_safra,self.train_dt = self._load_champ_challenger()
+            path = 'registries/pkl_{safra}/'.format(safra=self.train_safra)
+            last_pickle = self.main_cfg.model_name+'_'+str(self.train_dt)+'.pkl'
+            
+        self.logger.log('Train date: {train_dt}'.format(train_dt=self.train_dt))
         self.logger.log('Pickle utilizado: {path}{last_pickle}'.format(path=path,last_pickle=last_pickle))
         
         with open(path+last_pickle,'rb') as fp:
@@ -99,7 +125,8 @@ class Scorer():
             
         res['SAFRA'] = datetime.strptime(du.DateUtils.add(self.safra,1),'%Y%m')
         res['MODEL_NAME'] = self.main_cfg.model_name
-        res['DT_EXEC'] = self.metadata.metadata['executor']['score_timestamp']
+        res['DT_EXEC'] = datetime.now().strftime('%Y%m%d%H%M%S')
+        res['DT_TRAIN'] = self.train_dt
         res['CUS_CUST_ID'] = res['CUS_CUST_ID'].astype(pd.Int64Dtype())
         
         self.logger.log('Score types:\n{}'.format(res.dtypes))      
@@ -107,5 +134,5 @@ class Scorer():
         self.logger.log('Nulos:\n{}'.format(nulos))
         
         io_c = io(**self.main_cfg.persist_params_score)
-        io_c.write(res[['MODEL_NAME','CUS_CUST_ID','DECIL','SCORES_0','SCORES_1','SAFRA','DT_EXEC']])
+        io_c.write(res[['MODEL_NAME','CUS_CUST_ID','DECIL','SCORES_0','SCORES_1','SAFRA','DT_EXEC','DT_TRAIN']])
 

@@ -68,9 +68,10 @@ class MainCFG(Singleton):
             if 'params' in self.config['champ_challenger']['persist_method'].keys():
                 self.persist_params_champ = self.config['champ_challenger']['persist_method']['params']
             else:
-                self.persist_params_eval = {}
+                self.persist_params_champ = {}
 
-            self.persist_params_eval['tb_name'] = self.config['champ_challenger']['tb_name']
+            self.persist_params_champ['tb_name'] = self.config['champ_challenger']['tb_name']
+            self.tolerance_champ = self.config['champ_challenger']['tolerance_champ']
         
         self.prod = None
         

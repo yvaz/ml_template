@@ -12,6 +12,7 @@ from sklearn.model_selection import train_test_split
 from os.path import exists
 import pandas as pd
 from io_ml.io_parquet import IOParquet
+from io_ml.io_bq import IO_BQ
 from datetime import datetime
 import os
 import importlib
@@ -143,7 +144,7 @@ class Executor():
         
         self.write_pickle(pipe)
 
-        pipe.transform(test_X)
+        _,proba = pipe.transform(test_X)
         train.report(test_y,'train_results/')
         
         if self.main_cfg.prod:      
@@ -166,6 +167,51 @@ class Executor():
             
             self.prod_obj.write()
             
+        if self.main_cfg.champ_challenger:
+            
+            self._train_champ_challenger()
+            
+    def _train_champ_challenger(self):
+        
+        path = 'train_results/metric.csv'
+        roc_auc = int(float(pd.read_csv(path).iloc[0,0])*100)
+        
+        self.logger.log("ROC AUC do modelo atual: {roc_auc}".format(roc_auc=roc_auc))
+        
+        io_bq = IO_BQ(self.main_cfg.persist_params_champ['tb_name'])
+        
+        query = """SELECT SAFRA,DT_TRAIN,METRIC BEST_METRIC FROM 
+                   {tb_name}
+                   WHERE SAFRA <= PARSE_DATE('%Y%m','{safra}')
+                   AND MODEL_NAME='{model_name}'
+                   ORDER BY METRIC DESC
+                   """\
+                .format(tb_name=self.main_cfg.persist_params_champ['tb_name'],
+                        safra=self.safra,
+                        model_name=self.main_cfg.model_name)
+        
+        best_model = io_bq.read(query).loc[0]
+        candidate = pd.DataFrame([[self.main_cfg.model_name,
+                              self.metadata.metadata['executor']['train_timestamp'],
+                              roc_auc,
+                              datetime.strptime(self.safra,'%Y%m')
+                             ]],columns=['MODEL_NAME','DT_TRAIN','METRIC','SAFRA'])
+        
+        self.logger.log("BEST METRIC ON {tb_name}".format(tb_name=self.main_cfg.persist_params_champ['tb_name']))
+        self.logger.log(best_model)
+        self.logger.log(best_model.shape[0])
+        
+        if best_model.shape[0] == 0:
+            io_bq.write(candidate)
+        else:
+            self.logger.log('COMPARANDO METRICA ATUAL: {roc_atual}+{tol} >= {roc_best}: MELHOR METRICA'\
+                                .format(roc_atual=roc_auc,
+                                        tol=self.main_cfg.tolerance_champ,
+                                        roc_best=best_model['BEST_METRIC']))
+            if roc_auc + self.main_cfg.tolerance_champ >= best_model['BEST_METRIC']:
+                io_bq.write(candidate)
+        
+        
 
     def _score(self,fname,etl):
             

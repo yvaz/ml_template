@@ -41,7 +41,7 @@ class Evaluer():
             safra = du.DateUtils.add(self.safra,1)
             safra_fmt = datetime.strptime(safra,'%Y%m').strftime('%Y-%m-%d')
             query = """
-                        SELECT CUS_CUST_ID,SCORES_0,SCORES_1,DECIL,DT_EXEC
+                        SELECT CUS_CUST_ID,SCORES_0,SCORES_1,DECIL,DT_EXEC,DT_TRAIN
                         FROM {tb_name}
                         WHERE MODEL_NAME='{model_name}'
                         AND SAFRA='{safra}'
@@ -89,7 +89,8 @@ class Evaluer():
         conv['CONVERSAO_PERC'] = (conv['Positives']/(conv['Positives'].sum())*100).apply(context.create_decimal_from_float)
         conv['KS'] = conversion['KS'].apply(context.create_decimal_from_float)
         conv['SAFRA'] = datetime.strptime(du.DateUtils.add(self.safra,1),'%Y%m')
-        conv['DT_EXEC'] = self.preds['DT_EXEC']
+        conv['DT_EXEC'] = datetime.now().strftime('%Y%m%d%H%M%S')
+        conv['DT_TRAIN'] = self.preds['DT_TRAIN']
         
         conv = pd.concat(
             [pd.DataFrame(self.main_cfg.model_name,index=range(conv.shape[0]),columns=['MODEL_NAME'])\
@@ -100,13 +101,13 @@ class Evaluer():
         
         self.logger.log(conv.columns)
         
-        
         conv.columns = ['MODEL_NAME','DECIL','PUBLICO','CONVERSAO','RESP_RATE',
                               'LIFT','CONVERSAO_ACC','CONVERSAO_PERC','KS',
-                              'SAFRA','DT_EXEC']
+                              'SAFRA','DT_EXEC','DT_TRAIN']
+        self.logger.log(conv)
         
         io_c = io(**self.main_cfg.persist_params_eval)
-        self.preds = io_c.write(conv)
+        io_c.write(conv)
         
         
 
