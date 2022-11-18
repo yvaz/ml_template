@@ -33,4 +33,20 @@ class ResultsCollection():
         crt = crt.drop(['rand_resp','cmltv_p','cmltv_n',], axis=1)
 
         print('average response rate: ' , avg_resp_rate)
-        return crt
+        return crt    
+    
+    @staticmethod
+    def confusion_matrix (test, pred, bins):
+
+        res = pd.DataFrame(np.column_stack((test, pred)),
+                           columns=['Target','PR_0'])
+
+        
+        res['pred_grp'] = pd.cut(res['PR_0'].rank(method='first'), bins, labels=False)
+        res['target_grp'] = pd.cut(res['Target'].rank(method='first'), bins, labels=False)
+        
+        ret = res.drop(['Target','PR_0'],axis=1)
+        ret['cnt'] = 1
+        ret = ret.groupby(['pred_grp','target_grp']).agg({'cnt':'sum'})
+        
+        return ret.reset_index()

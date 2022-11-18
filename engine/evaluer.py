@@ -28,8 +28,7 @@ class Evaluer():
         self.config = self.main_cfg.config
         self.safra = safra
         
-
-    def load_score(self):
+    def _load_score_class(self):
         
         mod = importlib.import_module(self.main_cfg.persist_package_score)
         io = getattr(mod,self.main_cfg.persist_module_score)    
@@ -58,19 +57,52 @@ class Evaluer():
         else:
             self.preds = io_c.read()
 
-    def evaluate(self,y,path):
-                    
+    def _load_score_regr(self):
+        
+        mod = importlib.import_module(self.main_cfg.persist_package_score)
+        io = getattr(mod,self.main_cfg.persist_module_score)    
+            
+        io_c = io(**self.main_cfg.persist_params_score)
+        
+        if self.main_cfg.persist_package_score == 'io_ml.io_bq':
+            
+            safra = du.DateUtils.add(self.safra,1)
+            safra_fmt = datetime.strptime(safra,'%Y%m').strftime('%Y-%m-%d')
+            query = """
+                        SELECT CUS_CUST_ID,SCORES,DECIL,DT_EXEC,DT_TRAIN
+                        FROM {tb_name}
+                        WHERE MODEL_NAME='{model_name}'
+                        AND SAFRA='{safra}'
+                        AND DT_EXEC=(
+                                    SELECT max(DT_EXEC) FROM {tb_name}
+                                    WHERE MODEL_NAME='{model_name}'
+                                    AND SAFRA='{safra}'
+                                    )
+                    """.format(tb_name=self.main_cfg.persist_params_score['tb_name'],
+                               safra=safra_fmt,
+                               model_name=self.main_cfg.model_name)
+            
+            self.preds = io_c.read(query)
+        else:
+            self.preds = io_c.read()
+            
+    def load_score(self):
+        
+        if self.main_cfg.type == 'classification':
+            self._load_score_class()
+            
+        if self.main_cfg.type == 'regression':
+            self._load_score_regr()
+
+    def _evaluate_class(self,y,path):
+        
         if not os.path.isdir(path):
             os.system('mkdir '+path)
             
         eval_base = y.merge(self.preds,'inner','CUS_CUST_ID')
         eval_base['target'] = eval_base['target'].fillna(0)
 
-        pc.PlotsCollection.roc_curve_plot(eval_base['SCORES_1'],eval_base['target'])
-        plt.savefig(path+'roc_curve.png')
-        plt.close()
-
-        pc.PlotsCollection.targets_plot(eval_base['SCORES_1'],eval_base['target'])
+        pc.PlotsCollection.reg_sort_plot(eval_base['SCORES'],eval_base['target'])
         plt.savefig(path+'targets_plot.png')
         plt.close()
 
@@ -108,6 +140,55 @@ class Evaluer():
         
         io_c = io(**self.main_cfg.persist_params_eval)
         io_c.write(conv)
+ 
+    def _evaluate_regr(self,y,path):
+        
+        if not os.path.isdir(path):
+            os.system('mkdir '+path)
+            
+        eval_base = y.merge(self.preds,'inner','CUS_CUST_ID')
+        eval_base['target'] = eval_base['target'].fillna(0)
+
+        pc.PlotsCollection.reg_sort_plot(eval_base['SCORES'],eval_base['target'])
+        plt.savefig(path+'targets_plot.png')
+        plt.close()
+
+        conversion = rc.ResultsCollection.confusion_matrix(eval_base['target'],
+                                                           eval_base[['SCORES']],
+                                                           self.main_cfg.bins)
+        pivot_conv = conversion.pivot(index='pred_grp',columns=['target_grp'],values='cnt')
+        pivot_conv.to_csv(path+'conversion_report.csv')
+           
+        conversion['SAFRA'] = datetime.strptime(du.DateUtils.add(self.safra,1),'%Y%m')
+        conversion['DT_EXEC'] = datetime.now().strftime('%Y%m%d%H%M%S')
+        conversion['DT_TRAIN'] = self.preds['DT_TRAIN']
+        
+        conv = pd.concat(
+            [pd.DataFrame(self.main_cfg.model_name,index=range(conversion.shape[0]),columns=['MODEL_NAME'])\
+                 .reset_index(drop=True)
+             ,conversion],
+            axis=1
+        )
+        
+        #self.logger.log(conv.columns)
+        
+        conv.columns = ['MODEL_NAME','PRED_BIN','TARGET_BIN','QTDE','SAFRA',
+                              'DT_EXEC','DT_TRAIN']
+        self.logger.log(conv)
+                                  
+        io = self.main_cfg.config_mod(self.main_cfg.persist_method_eval)     
+        io_c = io(**self.main_cfg.persist_params_eval)
+        io_c.write(conv)       
+        
+    def evaluate(self,y,path):
+        
+        if self.main_cfg.type == 'classification':
+            self._evaluate_class(y,path)
+        
+        if self.main_cfg.type == 'regression':
+            self._evaluate_regr(y,path)
+                    
+        
         
         
 
