@@ -16,7 +16,7 @@ from utils.logger import Logger
 class MainCFG(Singleton):
     
     def __init__(self,
-                 config: str = 'main_cfg.yaml'):
+                 config: str = os.path.dirname(__file__)+'/main_cfg.yaml'):
         
         self.logger = Logger(self)
         self.logger.log('Configurando main_cfg singleton.')
@@ -25,7 +25,7 @@ class MainCFG(Singleton):
             self.config = yaml.load(fp, Loader = SafeLoader)
             
         self.model_name = self.config['model_name']
-        self.labeled = self.config['labeled']
+        self.type = self.config['type']
         self.train_test_sample = self.config['train_test_sample']
         self.persist = self.config['persist']  
         
@@ -80,6 +80,10 @@ class MainCFG(Singleton):
             self.prod = self.config['prod']
             self.prod_remote_path = self.prod['params']['remote_path']
             self.prod_mod = self.config_mod(self.prod)
+        
+        self.bins = None
+        if 'bins' in self.config.keys():
+            self.bins = self.config['bins']
         
     def config_mod(self,dict_mod):
         

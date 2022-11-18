@@ -5,6 +5,7 @@ from sklearn.metrics import roc_curve
 from sklearn.metrics import auc
 import seaborn as sns
 import pandas as pd
+import numpy as np
 
 class PlotsCollection():
     
@@ -32,8 +33,14 @@ class PlotsCollection():
 
     @staticmethod
     def targets_plot(preds,y):
-
-        print('TARGETS PREDS')
-        print(preds)
+        
         df = pd.DataFrame({'scores':preds,'targets':y})
         sns.histplot(data=df, x='scores', hue='targets', stat="density", common_norm=False)
+        
+    @staticmethod
+    def reg_sort_plot(preds,y):
+              
+        idx = np.argsort(y)
+        
+        plt.plot(np.array(y)[idx])
+        plt.plot(np.array(preds)[idx])

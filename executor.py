@@ -137,6 +137,8 @@ class Executor():
                                                 test_size=self.main_cfg.train_test_sample,
                                                 random_state=42)
 
+        self.logger.log(train_X)
+        self.logger.log(train_y)
         pipe.fit(train_X,train_y)
 
         if not exists('registries'):
@@ -144,7 +146,10 @@ class Executor():
         
         self.write_pickle(pipe)
 
-        _,proba = pipe.transform(test_X)
+        if self.main_cfg.type == 'classification':
+            _,proba = pipe.transform(test_X)
+        elif self.main_cfg.type == 'regression':
+            proba = pipe.transform(test_X)
         train.report(test_y,'train_results/')
         
         if self.main_cfg.prod:      

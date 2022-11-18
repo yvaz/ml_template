@@ -28,8 +28,15 @@ class PrepPipe(BaseEstimator, TransformerMixin):
 
         self.logger = Logger(self)
         self.metadata = io_metadata.IOMetadata()
-        self.cat_steps = self.config['categorical']['steps']
-        self.num_steps = self.config['numerical']['steps']
+        
+        self.cat_steps = None
+        if 'categorical' in self.config.keys():
+            self.cat_steps = self.config['categorical']['steps']
+            
+        self.num_steps = None
+        if 'numerical' in self.config.keys():
+            self.num_steps = self.config['numerical']['steps']
+            
         self.final_steps = self.config['final']['steps']
 
     def _create_pipe(self, steps):
@@ -71,33 +78,58 @@ class PrepPipe(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y = None):
        
-        cats = self.config['categories']
+        if 'categories' in self.config.keys():
+            cats = self.config['categories']
+        else:
+            cats = {}
         nums = list(set(X.columns) - set(cats))
 
         
         self.logger.log('Definindo configurações à partir do arquivo {cfg}'.format(cfg=self.config_name))
         
 
-        self.logger.log('Configurando pré-processamento de variáveis categóricas')
-        cat_pipe = Pipeline(self._create_pipe(self.cat_steps))
+        if self.cat_steps:      
+            self.logger.log('Configurando pré-processamento de variáveis categóricas')
+            cat_pipe = Pipeline(self._create_pipe(self.cat_steps))
 
-        self.logger.log('Configurando pré-processamento de variáveis numéricas')
-        num_pipe = Pipeline(self._create_pipe(self.num_steps))
+        if self.num_steps:
+            self.logger.log('Configurando pré-processamento de variáveis numéricas')
+            num_pipe = Pipeline(self._create_pipe(self.num_steps))
+
+        if self.num_steps and self.cat_steps:
+            col_transformer = ColumnTransformer(
+                        transformers=[
+                            ('cat',cat_pipe,cats),
+                            ('num',num_pipe,nums)
+                            ]
+            )
+        elif not self.num_steps and self.cat_steps:           
+            col_transformer = ColumnTransformer(
+                        transformers=[
+                            ('cat',cat_pipe,cats)
+                            ]
+            )
+        elif not self.cat_steps and self.num_steps:
+            col_transformer = ColumnTransformer(
+                        transformers=[
+                            ('num',num_pipe,nums)
+                            ]
+            )
+        else:
+            col_transformer = None
 
         self.logger.log('Configurando fluxo final')
         final_pipe = Pipeline(self._create_pipe(self.final_steps))
 
-        col_transformer = ColumnTransformer(
-                    transformers=[
-                        ('cat',cat_pipe,cats),
-                        ('num',num_pipe,nums)
-                        ]
-        )
-
         X[nums] = X[nums].astype(float)
 
         self.logger.log('Construindo pipeline')
-        self.pipe = Pipeline([('preproc',col_transformer),('final',final_pipe)])
+        
+        if col_transformer:
+            self.pipe = Pipeline([('preproc',col_transformer),('final',final_pipe)])
+        else:
+            self.pipe = final_pipe
+            
         self.logger.log('FIT')
         self.pipe.fit(X,y)
             

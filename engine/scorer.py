@@ -13,6 +13,7 @@ from io_ml.io_parquet import IOParquet
 from io_ml.io_bq import IO_BQ
 from io_ml import io_metadata
 from engine.main_cfg import MainCFG
+from decimal import Decimal
 
 class Scorer():
 
@@ -106,33 +107,66 @@ class Scorer():
         
         with open(path+last_pickle,'rb') as fp:
             self.model = pickle.load(fp)
+           
+    def score_class(self,X,y):
+            _,result = self.model.transform(X.drop('CUS_CUST_ID',axis=1))        
+            res = pd.DataFrame(np.column_stack([X['CUS_CUST_ID'].to_numpy(),result]),
+                           columns=['CUS_CUST_ID','PR_0', 'PR_1'])
 
+            res['DECIL'] = (pd.qcut(res['PR_0'].rank(method='first'), 10, labels=False)+1).astype(pd.Int64Dtype())
+
+            res['SCORES_0'] = (res['PR_0'].astype('Float64')*10000).astype('Int64')
+            res['SCORES_1'] = (res['PR_1'].astype('Float64')*10000).astype('Int64')
+
+            io = self.main_cfg.config_mod(self.main_cfg.persist_method_score)
+
+            res['SAFRA'] = datetime.strptime(du.DateUtils.add(self.safra,1),'%Y%m')
+            res['MODEL_NAME'] = self.main_cfg.model_name
+            res['DT_EXEC'] = datetime.now().strftime('%Y%m%d%H%M%S')
+            res['DT_TRAIN'] = self.train_dt
+            res['CUS_CUST_ID'] = res['CUS_CUST_ID'].astype(pd.Int64Dtype())
+
+            self.logger.log('Score types:\n{}'.format(res.dtypes))      
+            nulos = res.isnull().sum()
+            self.logger.log('Nulos:\n{}'.format(nulos))
+
+            io_c = io(**self.main_cfg.persist_params_score)
+            io_c.write(res[['MODEL_NAME','CUS_CUST_ID','DECIL','SCORES_0','SCORES_1','SAFRA','DT_EXEC','DT_TRAIN']])  
+            
+    def score_regr(self,X,y):
+            result = self.model.transform(X.drop('CUS_CUST_ID',axis=1))        
+            res = pd.DataFrame(np.column_stack([X['CUS_CUST_ID'].to_numpy(),result]),
+                           columns=['CUS_CUST_ID','PR_0'])
+
+            res['DECIL'] = (pd.cut(res['PR_0'].rank(method='first'), 
+                                    self.main_cfg.bins, 
+                                    labels=False)+1).astype(pd.Int64Dtype())   
+
+            cast_dec = lambda x : Decimal('{:.2f}'.format(x))
+            res['SCORES'] = list(map(cast_dec,res['PR_0']))
+
+            io = self.main_cfg.config_mod(self.main_cfg.persist_method_score)
+
+            res['SAFRA'] = datetime.strptime(du.DateUtils.add(self.safra,1),'%Y%m')
+            res['MODEL_NAME'] = self.main_cfg.model_name
+            res['DT_EXEC'] = datetime.now().strftime('%Y%m%d%H%M%S')
+            res['DT_TRAIN'] = self.train_dt
+            res['CUS_CUST_ID'] = res['CUS_CUST_ID'].astype(pd.Int64Dtype())
+
+            self.logger.log('Score types:\n{}'.format(res.dtypes))      
+            nulos = res.isnull().sum()
+            self.logger.log('Nulos:\n{}'.format(nulos))
+
+            io_c = io(**self.main_cfg.persist_params_score)
+            io_c.write(res[['MODEL_NAME','CUS_CUST_ID','DECIL','SCORES','SAFRA','DT_EXEC','DT_TRAIN']])  
+        
     def score(self,X,y=None):
         
         self.logger.log('Produzindo scores')
         
-        _,result = self.model.transform(X.drop('CUS_CUST_ID',axis=1))
-        
-        res = pd.DataFrame(np.column_stack([X['CUS_CUST_ID'].to_numpy(),result]),
-                       columns=['CUS_CUST_ID','PR_0', 'PR_1'])
-        
-        res['DECIL'] = (pd.qcut(res['PR_0'].rank(method='first'), 10, labels=False)+1).astype(pd.Int64Dtype())
-        
-        res['SCORES_0'] = (res['PR_0'].astype('Float64')*10000).astype('Int64')
-        res['SCORES_1'] = (res['PR_1'].astype('Float64')*10000).astype('Int64')
-                                 
-        io = self.main_cfg.config_mod(self.main_cfg.persist_method_score)
+        if self.main_cfg.type == 'classification':
+            self.score_class(X,y)
             
-        res['SAFRA'] = datetime.strptime(du.DateUtils.add(self.safra,1),'%Y%m')
-        res['MODEL_NAME'] = self.main_cfg.model_name
-        res['DT_EXEC'] = datetime.now().strftime('%Y%m%d%H%M%S')
-        res['DT_TRAIN'] = self.train_dt
-        res['CUS_CUST_ID'] = res['CUS_CUST_ID'].astype(pd.Int64Dtype())
-        
-        self.logger.log('Score types:\n{}'.format(res.dtypes))      
-        nulos = res.isnull().sum()
-        self.logger.log('Nulos:\n{}'.format(nulos))
-        
-        io_c = io(**self.main_cfg.persist_params_score)
-        io_c.write(res[['MODEL_NAME','CUS_CUST_ID','DECIL','SCORES_0','SCORES_1','SAFRA','DT_EXEC','DT_TRAIN']])
+        elif self.main_cfg.type == 'regression':
+            self.score_regr(X,y)
 

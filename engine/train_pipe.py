@@ -10,7 +10,7 @@ import numpy as np
 import optuna
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve, auc, r2_score, mean_absolute_error, mean_squared_error
 from sklearn.calibration import calibration_curve
 from sklearn.calibration import CalibratedClassifierCV
 from imblearn.under_sampling import RandomUnderSampler
@@ -26,6 +26,7 @@ import os
 import shap
 from io_ml import io_metadata
 from utils.logger import Logger
+from engine.main_cfg import MainCFG
 
 class TrainPipe(BaseEstimator, TransformerMixin):
 
@@ -42,6 +43,7 @@ class TrainPipe(BaseEstimator, TransformerMixin):
         with open(config,'r') as fp:
             self.config = yaml.load(fp, Loader = SafeLoader)
             
+        self.main_cfg = MainCFG()
         self.logger = Logger(self)
         self.logger.log('Inicializando pipeline de treinamento')
         
@@ -100,7 +102,7 @@ class TrainPipe(BaseEstimator, TransformerMixin):
             
             f_pred = getattr(model,self.tuning_pred)
             
-            if self.tuning_pred == 'predict_proba':
+            if self.main_cfg.type == 'predict_proba':
                 preds = f_pred(test_X)[:,1]
             else:
                 preds = f_pred(test_X)
@@ -195,64 +197,121 @@ class TrainPipe(BaseEstimator, TransformerMixin):
 
         return self
 
+    def _report_class(self,y,path):
+        
+        self.logger.log('Inicializando o processo de report')
+
+        if not os.path.isdir(path):
+            os.system('mkdir '+path)
+
+        preds = self.preds
+        proba = self.proba
+
+        self.logger.log('Produzindo relatório geral')
+        result = pd.DataFrame.from_dict(classification_report(y,preds,output_dict=True))
+        result.to_csv(path+'results.csv')
+
+        if self.calibration:
+            self.logger.log('Produzindo calibration plot')
+            mod = self.base_model
+            pc.PlotsCollection.calibration_plot(proba[:,1],y)
+            plt.savefig(path+'cal_curve.png')
+            plt.close()
+        else:
+            self.logger.log('Produzindo gráfico de shap')
+            mod = self.model
+            tree_explainer = shap.Explainer(self.model)
+            shap_values = tree_explainer.shap_values(self.X_test)
+            shap.summary_plot(shap_values, self.X_test, 
+                              feature_names=self.metadata.metadata['prep_pipe']['var_names'])       
+            plt.savefig(path+'shap_importance.png')
+            plt.close()
+
+        self.logger.log('Produzindo gráfico de curva ROC')
+        pc.PlotsCollection.roc_curve_plot(proba[:,1],y)
+        plt.savefig(path+'roc_curve.png')
+        plt.close()
+
+        self.logger.log('Produzindo resultado ROC AUC')
+        fpr, tpr, _ = roc_curve(y, proba[:,1])
+        ras = auc(fpr, tpr)
+        result = pd.DataFrame([ras])
+        result.to_csv(path+'metric.csv',index=False)
+        self.logger.log('-- {ras}'.format(ras=ras))
+
+        self.logger.log('Produzindo gráfico de targets')
+        pc.PlotsCollection.targets_plot(proba[:,1],y)
+        plt.savefig(path+'targets_plot.png')
+        plt.close()
+
+        conversion = rc.ResultsCollection.lift(y,proba,10)
+        conversion.to_csv(path+'conversion_report.csv')  
+
+    def _report_regr(self,y,path):
+        
+        self.logger.log('Inicializando o processo de report')
+
+        if not os.path.isdir(path):
+            os.system('mkdir '+path)
+
+        preds = self.preds
+        
+        self.logger.log('Produzindo r2')
+        r2 = r2_score(preds,y)
+        
+        self.logger.log('Produzindo MAE')
+        mae = mean_absolute_error(preds, y)
+        
+        self.logger.log('Produzindo MSE')
+        mse = mean_squared_error(preds, y)
+        
+        
+        self.logger.log(preds)
+        self.logger.log(y)
+        
+        corr_df = pd.DataFrame({'PRED':preds,'TRUE':y})
+
+        self.logger.log(corr_df.astype(float))
+        self.logger.log('Produzindo pearson')
+        pear = corr_df.corr(method='pearson').iloc[0,0]
+        
+        self.logger.log('Produzindo spearman')
+        spear = corr_df.corr(method='spearman').iloc[0,0]
+        
+        self.logger.log(pear)
+        self.logger.log(spear)
+        
+        results = pd.DataFrame({'R2':[r2],'MAE':[mae],'MSE':[mse],
+                                'PEARSON':[pear],'SPEARMAN':[spear]})
+        
+        results.to_csv(path+'results.csv')
+        
+        pc.PlotsCollection.reg_sort_plot(preds,y)
+        plt.savefig(path+'target_plot.png')
+        plt.close()
+        
+        
     def report(self,y,path):
         
         if self.rpt:
             
-            self.logger.log('Inicializando o processo de report')
+            if self.main_cfg.type == 'classification':
+                
+                self._report_class(y,path)
             
-            if not os.path.isdir(path):
-                os.system('mkdir '+path)
-            
-            preds = self.preds
-            proba = self.proba
-
-            self.logger.log('Produzindo relatório geral')
-            result = pd.DataFrame.from_dict(classification_report(y,preds,output_dict=True))
-            result.to_csv(path+'results.csv')
-
-            if self.calibration:
-                self.logger.log('Produzindo calibration plot')
-                mod = self.base_model
-                pc.PlotsCollection.calibration_plot(proba[:,1],y)
-                plt.savefig(path+'cal_curve.png')
-                plt.close()
-            else:
-                self.logger.log('Produzindo gráfico de shap')
-                mod = self.model
-                tree_explainer = shap.Explainer(self.model)
-                shap_values = tree_explainer.shap_values(self.X_test)
-                shap.summary_plot(shap_values, self.X_test, 
-                                  feature_names=self.metadata.metadata['prep_pipe']['var_names'])       
-                plt.savefig(path+'shap_importance.png')
-                plt.close()
-            
-            self.logger.log('Produzindo gráfico de curva ROC')
-            pc.PlotsCollection.roc_curve_plot(proba[:,1],y)
-            plt.savefig(path+'roc_curve.png')
-            plt.close()
-            
-            self.logger.log('Produzindo resultado ROC AUC')
-            fpr, tpr, _ = roc_curve(y, proba[:,1])
-            ras = auc(fpr, tpr)
-            result = pd.DataFrame([ras])
-            result.to_csv(path+'metric.csv',index=False)
-            self.logger.log('-- {ras}'.format(ras=ras))
-            
-            self.logger.log('Produzindo gráfico de targets')
-            pc.PlotsCollection.targets_plot(proba[:,1],y)
-            plt.savefig(path+'targets_plot.png')
-            plt.close()
-            
-            conversion = rc.ResultsCollection.lift(y,proba,10)
-            conversion.to_csv(path+'conversion_report.csv')
+            elif self.main_cfg.type == 'regression':
+                
+                self._report_regr(y,path)
 
     def transform(self, X, y = None):
     
         self.X_test = X
         self.preds = self.model.predict(X)
-        self.proba = self.model.predict_proba(X)
-
-        return self.preds,self.proba
+        
+        if self.main_cfg.type == 'classification':
+            self.proba = self.model.predict_proba(X)
+            return self.preds,self.proba
+        elif self.main_cfg.type == 'regression':
+            return self.preds
 
 

@@ -20,7 +20,7 @@ class ETL():
                  safra: int,
                  config: str = os.path.dirname(__file__)+"/etl_cfg.yaml", 
                  flow: str = "train",
-                 labeled: bool = True,
+                 model_type: str = 'classification',
                  persist=True):
 
         self.logger = Logger(self)
@@ -37,7 +37,7 @@ class ETL():
 
         self.key = self.config['key']
         self.flow = flow
-        self.labeled = labeled
+        self.model_type = model_type
         self.recurrence = self.config['recurrence']
 
         self.n_samples = self.config['train_flow']['n_samples']
@@ -60,7 +60,8 @@ class ETL():
         self.pub_mod = list(self.config['pub'].keys())[0]
         self.pub_met = self.config['pub'][self.pub_mod]
 
-        if self.labeled:
+        if self.model_type in ('classification','regression'):
+            
             self.target_mod = list(self.config['target'].keys())[0]
             self.target_met = self.config['target'][self.target_mod]
         
@@ -83,7 +84,7 @@ class ETL():
         pub_mod = importlib.import_module(self.pub_mod)
         self.pubs = getattr(pub_mod,self.pub_met)
 
-        if self.labeled:
+        if self.model_type in ('classification','regression'):
 
             target_mod = importlib.import_module(self.target_mod)
             self.targets = getattr(target_mod,self.target_met)
@@ -98,7 +99,7 @@ class ETL():
     
     def _extract_train(self):
 
-        if self.labeled:
+        if self.model_type in ('classification','regression'):
             
             self.logger.log('Extraindo dataset de treinamento para aprendizado supervisionado')
             
