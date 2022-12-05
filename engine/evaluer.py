@@ -102,7 +102,7 @@ class Evaluer():
         eval_base = y.merge(self.preds,'inner','CUS_CUST_ID')
         eval_base['target'] = eval_base['target'].fillna(0)
 
-        pc.PlotsCollection.reg_sort_plot(eval_base['SCORES'],eval_base['target'])
+        pc.PlotsCollection.targets_plot(eval_base['SCORES_1'],eval_base['target'])
         plt.savefig(path+'targets_plot.png')
         plt.close()
 
