@@ -140,10 +140,13 @@ class Scorer():
 
             res['DECIL'] = (pd.cut(res['PR_0'].rank(method='first'), 
                                     self.main_cfg.bins, 
-                                    labels=False)+1).astype(pd.Int64Dtype())   
+                                    labels=False)+1).astype(pd.Int64Dtype())  
 
             cast_dec = lambda x : Decimal('{:.2f}'.format(x))
             res['SCORES'] = list(map(cast_dec,res['PR_0']))
+            
+            self.logger.log('BINS: \n{bins}'.format(bins=self.main_cfg.bins))
+            self.logger.log('SCORES: \n{score}'.format(score=res['SCORES']))
 
             io = self.main_cfg.config_mod(self.main_cfg.persist_method_score)
 

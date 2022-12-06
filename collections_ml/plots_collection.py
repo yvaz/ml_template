@@ -42,5 +42,5 @@ class PlotsCollection():
               
         idx = np.argsort(y)
         
-        plt.plot(np.array(y)[idx])
-        plt.plot(np.array(preds)[idx])
+        plt.plot(np.log(np.array(y)[idx]+1e-5))
+        plt.plot(np.log(np.array(preds)[idx]+1e-5))
