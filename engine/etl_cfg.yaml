@@ -5,6 +5,8 @@ target:
   inputs.target: gen_target
 features:
   inputs.features: gen_features
+scores:
+  inputs.scores: gen_scores
 train_flow: 
   n_samples: None
 target_advance: 1

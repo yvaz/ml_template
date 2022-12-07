@@ -6,8 +6,6 @@ import json
 import base64
 import os
 from datetime import datetime
-import yaml
-from yaml.loader import SafeLoader
 
 def gen_scores(safra):
 
@@ -21,10 +19,6 @@ def gen_scores(safra):
                     datetime.strptime(safra,"%Y%m")
                 ,"%Y-%m-%d")
     
-    with open(os.path.dirname(__file__)+'/../engine/main_cfg.yaml','r') as fp:
-        config = yaml.load(fp, Loader = SafeLoader)
-        
-    model_name = config['model_name']
     
     query = """
         WITH CUSTS_OUT AS (
@@ -703,29 +697,10 @@ def gen_scores(safra):
             LEFT JOIN CARTAOCREDITO AS CART ON CA.cus_cust_id = CART.CUS_CUST_ID
             LEFT JOIN LOYALTY AS LYL ON CA.cus_cust_id = LYL.CUS_CUST_ID
             LEFT JOIN GEOLOC AS GEO ON CA.cus_cust_id = GEO.CUS_CUST_ID
-            LEFT JOIN (
-                SELECT * FROM ML_TBL.TB_PROPENSITY_SCORES
-                WHERE safra=PARSE_DATE('%Y-%m-%d','{safra}')
-                AND DT_EXEC=(SELECT max(DT_EXEC) FROM ML_TBL.TB_PROPENSITY_SCORES
-                                WHERE SAFRA=PARSE_DATE('%Y-%m-%d','{safra}')
-                                AND MODEL_NAME='{model_name}'
-                            )
-                AND MODEL_NAME='{model_name}'
-                ) SCORES ON CA.CUS_CUST_ID = SCORES.CUS_CUST_ID
-        WHERE
-            STATUS = 'ACTIVE' --APP MP ATIVO
-            -- AND SC30.AVAILABLE_BALANCE > 0 --POSSUI SALDO
+            WHERE CC.SEGMENT <> 'SELLER'
+            AND STATUS = 'ACTIVE' --APP MP ATIVO
             AND EM.cus_cust_id IS NULL --NÂO É FUNCIONARIO MELI
-            AND P30.CUS_CUST_ID IS NOT NULL --RECEBEU PUSH 30 DIAS (NOT BLOKEDLIST)
-            -- AND P30.NR_OPENS > 0 -- ABRIU ALGUM PUSH NOS ULTIMOS 30 DIAS
-            AND CC.SEGMENT = 'SELLER'
-            AND (
-                CI.FLAG_IN_MES IS NULL
-                OR CI.FLAG_IN_MES = 'S'
-            )
-            AND SCORES.CUS_CUST_ID IS NULL""".format(safra=safra_ini,model_name=model_name)
+            """.format(safra=safra_ini)
 
     df = bigquery.execute_response(query,  output="df")
     return df
-
-

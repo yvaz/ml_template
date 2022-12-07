@@ -1,6 +1,6 @@
 train:
   package: lightgbm
-  module: LGBMClassifier
+  module: LGBMRegressor
   params:
     boosting_type: gbdt
     n_estimators: 2000
@@ -8,13 +8,13 @@ train:
     is_unbalance: "true"
 test_sample_rate: 0.20
 tuning:
-  n_trials: 10
-  direction: maximize 
-  pred_tuning: predict_proba
+  n_trials: 50
+  direction: minimize
+  pred_tuning: predict
   sample_rate: 0.20
   tuning_metric:
     package: sklearn.metrics
-    module: roc_auc_score
+    module: mean_absolute_error
   random_state: 42
   trial.suggest_loguniform:
     min_gain_to_split: [0.1,15]
@@ -26,8 +26,7 @@ tuning:
     lambda_l1: [0.01,5]
     lambda_l2: [0.01,5]
   trial.suggest_categorical:
-    objective: ['binary','cross_entropy']    
-    max_depth: [2,3,4,5,6,7]
+    max_depth: [2,3,4,5,6,7,8,9,10,11,12,13,14,15]
   trial.suggest_int:
     min_data_in_leaf: [1000,65000]
     num_leaves: [8,80]
@@ -37,13 +36,4 @@ tuning:
 #  cal_sample_rate: 0.20
 #optimize_threshold: True
 report: True
-upload_report:
-  package: io_ml.io_s3
-  module: IO_S3
-  params:
-    acc_key_name: SECRET_SECRET_S3_ACCESS_KEY
-    sec_key_name: SECRET_SECRET_S3_SECRET_KEY
-    remote_path: prod/meliextra/modelo/opf/
-    bucket: analytics.data.ml
-opt_sample_rate: 0.20
 
