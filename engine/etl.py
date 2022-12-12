@@ -12,10 +12,22 @@ from utils import date_utils as du
 from io_ml import io_metadata
 from utils.logger import Logger
 
+"""
+Classe que executa o ETL das Features, Pub Alvo, Pub Score e Targets
+"""
 class ETL():
 
+    # Chave do metadado
     metadata_key = 'etl_pipe'
     
+    """
+    Construtor
+    @param safra Safra definida para executar o ETL
+    @param config Arquivo de configuração
+    @param flow Fluxo de processamento ('train','score','eval')
+    @param model_type Tipo de modelo ('classificação','regressão')
+    @param persist Tipo de persistência dos dados de insumos ('always','while_execution','never')
+    """
     def __init__(self,
                  safra: int,
                  config: str = os.path.dirname(__file__)+"/etl_cfg.yaml", 
@@ -73,6 +85,9 @@ class ETL():
         self.feats_mod = list(self.config['features'].keys())[0]
         self.feats_met = self.config['features'][self.feats_mod]
 
+    """
+    Configura os módulos a serem utilizados pelo ETL
+    """
     def setup(self):
 
         self.logger.log('Configurando ETL a partir de {cfg}'.format(cfg=self.config_name))
@@ -97,6 +112,9 @@ class ETL():
         feats_mod = importlib.import_module(self.feats_mod)
         self.feats = getattr(feats_mod,self.feats_met)
     
+    """
+    Extrai dataset de treinamento podendo ou não salvar em ../registries/
+    """
     def _extract_train(self):
 
         if self.model_type in ('classification','regression'):
@@ -167,6 +185,9 @@ class ETL():
 
             return master
 
+    """
+    Extrai dataset de score podendo ou não salvar em ../registries/
+    """
     def _extract_score(self):
         
         self.logger.log('Extraindo dataset de escoragem')
@@ -212,6 +233,9 @@ class ETL():
         
         return master
 
+    """
+    Extrai dataset de avaliação podendo ou não salvar em ../registries/
+    """
     def _extract_eval(self):
         
         self.logger.log('Extraindo dataset de avaliação')
@@ -238,6 +262,9 @@ class ETL():
 
         return master
 
+    """
+    Persiste dataset em registries/
+    """
     def _persist(self,dset,fname):
         
         self.logger.log('Persistindo dataset de treinamento em registries')
@@ -248,13 +275,21 @@ class ETL():
             
         io_parquet = IOParquet('registries/',fname)
         io_parquet.write(dset)
-                        
+                     
+    """
+    Dropa variáveis definidas no arquivo de configuração etl_cfg.yaml
+    @param features Lista com nome das features a serem dropadas
+    """
     def _drop(self,features):
                 
         self.logger.log('Dropando variáveis defindas no arquivo de configuração')
         features = features.drop(self.drop, axis=1)
         return features    
-                        
+                   
+    """
+    Executa o ETL dependendo do fluxo de processamento do modelo
+    @return pandas.DataFrame Dados extraídos pelo script
+    """
     def extract(self):
                               
         if self.flow == 'train':

@@ -27,11 +27,8 @@ numerical:
       fill_value: 0
 final:
   steps:
-    - imbalance:
-      package: imblearn.under_sampling
-      module: RandomUnderSampler
     - dim_reduction:
       package: sklearn.feature_selection
       module: VarianceThreshold
       params:
-        threshold: 0.05
+        threshold: 0.00000005

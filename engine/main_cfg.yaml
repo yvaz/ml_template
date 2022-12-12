@@ -1,29 +1,26 @@
-model_name: opf-sellers-optin
-labeled: True
-train_test_sample: 0.20
+model_name: creds-toy-regression
+type: regression
+train_test_sample: 0.50
 persist: 'always'
+bins:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
 score:
-  tb_name: meli-bi-data.ML_TBL.TB_PROPENSITY_SCORES
+  tb_name: meli-bi-data.ML_TBL.TB_POTENTIAL_SCORES
   persist_method: 
     package: io_ml.io_bq
     module: IO_BQ
 eval:
-  tb_name: meli-bi-data.ML_TBL.TB_PROP_DECIL_EVAL
+  tb_name: meli-bi-data.ML_TBL.TB_POTE_DECIL_EVAL
   persist_method: 
     package: io_ml.io_bq
     module: IO_BQ
-prod:
-  package: io_ml.io_s3
-  module: IO_S3
-  params:
-    acc_key_name: SECRET_SECRET_S3_ACCESS_KEY
-    sec_key_name: SECRET_SECRET_S3_SECRET_KEY
-    remote_path: prod/meliextra/modelo/opf/
-    bucket: analytics.data.ml
-champ_challenger:
-  tolerance_champ: 3
-  tb_name: meli-bi-data.ML_TBL.TB_CHAMP_CHALLENGER
-  persist_method: 
-    package: io_ml.io_bq
-    module: IO_BQ
-  

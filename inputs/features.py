@@ -19,6 +19,7 @@ def gen_features(safra):
                     datetime.strptime(safra,"%Y%m")
                 ,"%Y-%m-%d")
     
+    
     query = """
         WITH CUSTS_OUT AS (
         SELECT
@@ -702,7 +703,7 @@ def gen_features(safra):
             AND EM.cus_cust_id IS NULL --NÂO É FUNCIONARIO MELI
             AND P30.CUS_CUST_ID IS NOT NULL --RECEBEU PUSH 30 DIAS (NOT BLOKEDLIST)
             -- AND P30.NR_OPENS > 0 -- ABRIU ALGUM PUSH NOS ULTIMOS 30 DIAS
-            AND CC.SEGMENT = 'SELLER'
+            AND CC.SEGMENT <> 'SELLER'
             AND (
                 CI.FLAG_IN_MES IS NULL
                 OR CI.FLAG_IN_MES = 'S'
@@ -710,4 +711,3 @@ def gen_features(safra):
 
     df = bigquery.execute_response(query,  output="df")
     return df
-

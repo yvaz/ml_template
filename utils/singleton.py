@@ -1,5 +1,8 @@
 from abc import ABCMeta
 
+"""
+Classe que define um singletone abstrato
+"""
 class ABCSingleton(ABCMeta):
     _instances = {}
     def __call__(cls, *args, **kwargs):
@@ -7,7 +10,9 @@ class ABCSingleton(ABCMeta):
             cls._instances[cls] = super(ABCSingleton, cls).__call__(*args, **kwargs)
         return cls._instances[cls]
     
-
+"""
+Classe que define um singletone
+"""
 class Singleton():
     _instances = {}
     def __call__(cls, *args, **kwargs):

@@ -11,6 +11,9 @@ from io_ml import io_metadata
 from utils.logger import Logger
 import os
 
+"""
+Classe do pipeline de preprocessamento dos dados
+"""
 class PrepPipe(BaseEstimator, TransformerMixin):
 
     estimator_params = {'boruta':['estimator']}
@@ -18,6 +21,10 @@ class PrepPipe(BaseEstimator, TransformerMixin):
     
     metadata_key = 'prep_pipe'
 
+    """
+    Construtor
+    @param config Arquivo de configuração do préprocessamento dos dados
+    """
     def __init__(self,
                  config: str = os.path.dirname(__file__)+"/prep_cfg.yaml"):
 
@@ -39,6 +46,11 @@ class PrepPipe(BaseEstimator, TransformerMixin):
             
         self.final_steps = self.config['final']['steps']
 
+    """
+    Configura os módulos usados nos steps do preprocessamento
+    @param steps Passos definidos no arquivo de configuração
+    @return Retorna uma lista de módulos python utilizados para o preprocessamento
+    """
     def _create_pipe(self, steps):
         
         mod_list = []  
@@ -76,6 +88,12 @@ class PrepPipe(BaseEstimator, TransformerMixin):
         return mod_list
 
 
+    """
+    Aplica o fit do preprocessamento nos dados
+    @param X Features
+    @param y Labels
+    @return self PrepPipe
+    """
     def fit(self, X, y = None):
        
         if 'categories' in self.config.keys():
@@ -144,6 +162,12 @@ class PrepPipe(BaseEstimator, TransformerMixin):
         
         return self
 
+    """
+    Transforma os dados
+    @param X Features
+    @param y Labels
+    @return numpy.array Dados tratados
+    """
     def transform(self, X, y = None):
 
         return self.pipe.transform(X)

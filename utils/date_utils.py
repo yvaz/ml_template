@@ -1,8 +1,18 @@
 from datetime import datetime as dt
 from dateutil.relativedelta import relativedelta as rdelta
 
+"""
+Classe que compõe métodos estáticos úteis para tratamento de data
+"""
 class DateUtils():
     
+    """
+    Adiciona período (semana/mês) à uma data
+    @param safra Safra sobre a qual será adicionado um período
+    @param deta Período a ser adicionado (int)
+    @param recorr Define se período é mês (month) ou semana (week)
+    @return str String com a safra tratada
+    """
     @staticmethod
     def add(safra,delta,recorr='month'):
         
