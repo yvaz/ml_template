@@ -16,8 +16,16 @@ import decimal
 from io_ml import io_metadata
 from engine.main_cfg import MainCFG
 
+"""
+Classe que efetua a avaliação do modelo
+"""
 class Evaluer():
     
+    """
+    Construtor
+    @param safra Safra de avaliação
+    @param config Arquivo de configuração principal
+    """
     def __init__(self,
                  safra: int,
                  config: str = os.path.dirname(__file__)+"/main_cfg.yaml"):
@@ -27,7 +35,10 @@ class Evaluer():
         self.main_cfg = MainCFG(config)
         self.config = self.main_cfg.config
         self.safra = safra
-        
+    
+    """
+    Carrega a última escoragem de classificação na safra específica
+    """        
     def _load_score_class(self):
         
         mod = importlib.import_module(self.main_cfg.persist_package_score)
@@ -56,7 +67,10 @@ class Evaluer():
             self.preds = io_c.read(query)
         else:
             self.preds = io_c.read()
-
+    
+    """
+    Carrega a última escoragem de regressão na safra específica
+    """
     def _load_score_regr(self):
         
         mod = importlib.import_module(self.main_cfg.persist_package_score)
@@ -85,7 +99,10 @@ class Evaluer():
             self.preds = io_c.read(query)
         else:
             self.preds = io_c.read()
-            
+    
+    """
+    Carrega a última escoragem
+    """            
     def load_score(self):
         
         if self.main_cfg.type == 'classification':
@@ -93,7 +110,12 @@ class Evaluer():
             
         if self.main_cfg.type == 'regression':
             self._load_score_regr()
-
+    
+    """
+    Efetua a avaliação da classificação
+    @param y Labels
+    @param path Caminho onde a avaliação será salve
+    """ 
     def _evaluate_class(self,y,path):
         
         if not os.path.isdir(path):
@@ -140,7 +162,12 @@ class Evaluer():
         
         io_c = io(**self.main_cfg.persist_params_eval)
         io_c.write(conv)
- 
+     
+    """
+    Efetua a avaliação da regressão
+    @param y Labels
+    @param path Caminho onde a avaliação será salve
+    """
     def _evaluate_regr(self,y,path):
         
         if not os.path.isdir(path):
@@ -179,7 +206,12 @@ class Evaluer():
         io = self.main_cfg.config_mod(self.main_cfg.persist_method_eval)     
         io_c = io(**self.main_cfg.persist_params_eval)
         io_c.write(conv)       
-        
+     
+    """
+    Efetua a avaliação
+    @param y Labels
+    @param path Caminho onde a avaliação será salve
+    """        
     def evaluate(self,y,path):
         
         if self.main_cfg.type == 'classification':

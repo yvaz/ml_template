@@ -28,6 +28,9 @@ from io_ml import io_metadata
 from utils.logger import Logger
 from engine.main_cfg import MainCFG
 
+"""
+Classe do pipeline de treinamento do modelo
+"""
 class TrainPipe(BaseEstimator, TransformerMixin):
 
     tuning_f = {'trial.suggest_loguniform',
@@ -37,6 +40,10 @@ class TrainPipe(BaseEstimator, TransformerMixin):
     
     metadata_key = 'train_pipe'
 
+    """
+    Construtor
+    @param config Arquivo de configuração de treinamento
+    """
     def __init__(self,
                  config: str = os.path.dirname(__file__)+"/train_cfg.yaml"):
 
@@ -71,7 +78,12 @@ class TrainPipe(BaseEstimator, TransformerMixin):
             self.tuning_pred = self.config['tuning']['pred_tuning']
 
 
-
+    """
+    Efetua o tuning do modelo de ML
+    @oaram X Features
+    @param y Labels
+    @return dict Hiperparâmetros otimizados para fitting do modelo
+    """
     def _tuning_train(self, X, y):
         
         def objective(trial, data=X, target=y):
@@ -132,6 +144,12 @@ class TrainPipe(BaseEstimator, TransformerMixin):
         return study.best_trial.params
             
 
+    """
+    Treina o modelo
+    @param X Features
+    @param y Labels
+    @return self PipeTrain
+    """
     def fit(self, X, y = None):
         
         self.logger.log('Initializando treinamento')
@@ -197,6 +215,11 @@ class TrainPipe(BaseEstimator, TransformerMixin):
 
         return self
 
+    """
+    Report do modelo de classificação
+    @param y Label real
+    @path Diretório dos reports
+    """
     def _report_class(self,y,path):
         
         self.logger.log('Inicializando o processo de report')
@@ -247,6 +270,11 @@ class TrainPipe(BaseEstimator, TransformerMixin):
         conversion = rc.ResultsCollection.lift(y,proba,10)
         conversion.to_csv(path+'conversion_report.csv')  
 
+    """
+    Report do modelo de regressão
+    @param y Label real
+    @path Diretório dos reports
+    """
     def _report_regr(self,y,path):
         
         self.logger.log('Inicializando o processo de report')
@@ -290,7 +318,11 @@ class TrainPipe(BaseEstimator, TransformerMixin):
         plt.savefig(path+'target_plot.png')
         plt.close()
         
-        
+    """
+    Report
+    @param y Label real
+    @path Diretório dos reports
+    """    
     def report(self,y,path):
         
         if self.rpt:
@@ -303,6 +335,12 @@ class TrainPipe(BaseEstimator, TransformerMixin):
                 
                 self._report_regr(y,path)
 
+    """
+    Transforma os dados
+    @param X Features
+    @param y Labels
+    @return numpy.array Preds values
+    """
     def transform(self, X, y = None):
     
         self.X_test = X

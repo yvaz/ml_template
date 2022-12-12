@@ -15,8 +15,16 @@ from io_ml import io_metadata
 from engine.main_cfg import MainCFG
 from decimal import Decimal
 
+"""
+Classe que efetua a escoragem do modelo
+"""
 class Scorer():
 
+    """
+    Construtor
+    @param safra Safra de escoragem
+    @param config Arquivo de configuração principal
+    """
     def __init__(self,
                  safra: int,
                  config: str = os.path.dirname(__file__)+"/main_cfg.yaml"):
@@ -27,6 +35,10 @@ class Scorer():
         self.logger.log('Inicializando processo de escoragem')
         self.safra = safra
         
+    """
+    Retorna a última safra treinada
+    @return str Última safra treinada
+    """
     def get_last_trained_safra(self):
         
         path = 'registries/'
@@ -51,6 +63,10 @@ class Scorer():
         
         return max(safras)
 
+    """
+    Seleciona o champing challenger da tabela definida no arquivo de configuração principal
+    @return str A versão do melhor modelo
+    """
     def _load_champ_challenger(self):
         
         io_bq = IO_BQ(self.main_cfg.persist_params_champ['tb_name'])
@@ -68,6 +84,9 @@ class Scorer():
         
         return best_model['SAFRA'].strftime('%Y%m'),best_model['DT_TRAIN']
     
+    """
+    Baixa o modelo do S3
+    """
     def load_model(self):
         
         self.logger.log('Carregando modelo para escoragem')     
@@ -108,6 +127,10 @@ class Scorer():
         with open(path+last_pickle,'rb') as fp:
             self.model = pickle.load(fp)
            
+    """
+    Efetua o score de classificação e escreve 
+    no local determinado no arquivo de config. principal
+    """
     def score_class(self,X,y):
             _,result = self.model.transform(X.drop('CUS_CUST_ID',axis=1))        
             res = pd.DataFrame(np.column_stack([X['CUS_CUST_ID'].to_numpy(),result]),
@@ -133,6 +156,10 @@ class Scorer():
             io_c = io(**self.main_cfg.persist_params_score)
             io_c.write(res[['MODEL_NAME','CUS_CUST_ID','DECIL','SCORES_0','SCORES_1','SAFRA','DT_EXEC','DT_TRAIN']])  
             
+    """
+    Efetua o score de classificação e escreve 
+    no local determinado no arquivo de config. principal
+    """           
     def score_regr(self,X,y):
             result = self.model.transform(X.drop('CUS_CUST_ID',axis=1))        
             res = pd.DataFrame(np.column_stack([X['CUS_CUST_ID'].to_numpy(),result]),
@@ -162,7 +189,12 @@ class Scorer():
 
             io_c = io(**self.main_cfg.persist_params_score)
             io_c.write(res[['MODEL_NAME','CUS_CUST_ID','DECIL','SCORES','SAFRA','DT_EXEC','DT_TRAIN']])  
-        
+    
+    """
+    Efetua o score (classifc., regress.)
+    @param X Features
+    @param y Labels
+    """
     def score(self,X,y=None):
         
         self.logger.log('Produzindo scores')

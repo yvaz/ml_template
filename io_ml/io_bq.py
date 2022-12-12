@@ -7,8 +7,15 @@ from io_ml.io_ml import IO_ML
 from utils.logger import Logger
 from datetime import datetime
 
+"""
+Classe que trata a entrada e saída para o BigQuery
+"""
 class IO_BQ(IO_ML):
     
+    """
+    Construtor
+    @param tb_name Nome da tabela para busca/inserção
+    """
     def __init__(self,tb_name):
         self.logger = Logger(self)
         self.tb_name = tb_name
@@ -17,6 +24,11 @@ class IO_BQ(IO_ML):
                 credentials=credentials
             )
     
+    """
+    Leitura de tabela
+    @param query Executa a query <query>
+    @return pandas.DataFrame Dataframe com os dados da retornados pela execução de <query>
+    """
     def read(self,query):
         
         self.logger.log('QUERY READ: \n{query}'.format(query=query))
@@ -28,6 +40,10 @@ class IO_BQ(IO_ML):
         
         return df
         
+    """
+    Insere <data> na tabela self.tb_name
+    @param data Dados a serem inseridos em self.tb_name
+    """
     def write(self,data):      
         
         data.to_csv('data_tmp.csv',index=False, header=False)
