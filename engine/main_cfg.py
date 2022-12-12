@@ -13,8 +13,15 @@ from utils import date_utils as du
 from io_ml import io_metadata
 from utils.logger import Logger
 
+"""
+Classe que armazena informação do arquivo de configuração principal 
+"""
 class MainCFG(Singleton):
     
+    """
+    Construtor
+    @param config Arquivo de configuração principal
+    """
     def __init__(self,
                  config: str = os.path.dirname(__file__)+'/main_cfg.yaml'):
         
@@ -85,6 +92,10 @@ class MainCFG(Singleton):
         if 'bins' in self.config.keys():
             self.bins = self.config['bins']
         
+    """
+    Função para configurar um módulo
+    @param dict_mod Dicionário com os parâmetros do módulo
+    """
     def config_mod(self,dict_mod):
         
         prod_pack = importlib.import_module(dict_mod['package'])
