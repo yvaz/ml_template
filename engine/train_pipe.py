@@ -114,7 +114,7 @@ class TrainPipe(BaseEstimator, TransformerMixin):
             
             f_pred = getattr(model,self.tuning_pred)
             
-            if self.main_cfg.type == 'predict_proba':
+            if self.main_cfg.type == 'classification':
                 preds = f_pred(test_X)[:,1]
             else:
                 preds = f_pred(test_X)
