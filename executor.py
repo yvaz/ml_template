@@ -195,20 +195,24 @@ class Executor():
                         safra=self.safra,
                         model_name=self.main_cfg.model_name)
         
-        best_model = io_bq.read(query).loc[0]
+        df_best = io_bq.read(query)
+        if df_best.shape[0] > 0:
+            best_model = io_bq.read(query).loc[0]
+        else:
+            best_model = None
+            
         candidate = pd.DataFrame([[self.main_cfg.model_name,
                               self.metadata.metadata['executor']['train_timestamp'],
                               roc_auc,
                               datetime.strptime(self.safra,'%Y%m')
                              ]],columns=['MODEL_NAME','DT_TRAIN','METRIC','SAFRA'])
         
-        self.logger.log("BEST METRIC ON {tb_name}".format(tb_name=self.main_cfg.persist_params_champ['tb_name']))
-        self.logger.log(best_model)
-        self.logger.log(best_model.shape[0])
-        
-        if best_model.shape[0] == 0:
+        if best_model is None:
             io_bq.write(candidate)
-        else:
+        else:     
+            self.logger.log("BEST METRIC ON {tb_name}".format(tb_name=self.main_cfg.persist_params_champ['tb_name']))
+            self.logger.log(best_model)
+            self.logger.log(best_model.shape[0])
             self.logger.log('COMPARANDO METRICA ATUAL: {roc_atual}+{tol} >= {roc_best}: MELHOR METRICA'\
                                 .format(roc_atual=roc_auc,
                                         tol=self.main_cfg.tolerance_champ,
@@ -228,6 +232,7 @@ class Executor():
 
         # PREPARANDO PIPELINE
         score = scorep.Scorer(safra=self.safra)
+        self.logger.log('Scoring {safra}'.format(safra=self.safra))
 
         if exists('registries/score_dataset.parquet'):
             iop = IOParquet('registries/','score_dataset.parquet')
