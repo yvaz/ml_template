@@ -80,13 +80,16 @@ class Scorer():
                         safra=self.safra,
                         model_name=self.main_cfg.model_name)
         
-        best_model = io_bq.read(query).loc[0]
-        
-        return best_model['SAFRA'].strftime('%Y%m'),best_model['DT_TRAIN']
+        if io_bq.read(query).shape[0] > 0:
+            best_model = io_bq.read(query).loc[0]
+            return best_model['SAFRA'].strftime('%Y%m'),best_model['DT_TRAIN']
+        else:
+            best_model = None
+            return None,best_model 
     
     """
     Baixa o modelo do S3
-    """
+    """    
     def load_model(self):
         
         self.logger.log('Carregando modelo para escoragem')     
@@ -101,7 +104,8 @@ class Scorer():
             os.system('mv ./registries_tmp/pkl_* ./registries/')
             os.system('rm -rf ./registries_tmp')
         
-        if not self.main_cfg.champ_challenger:
+        self.train_safra,self.train_dt = self._load_champ_challenger()
+        if not self.main_cfg.champ_challenger or self.train_dt is None:
             self.train_safra = self.get_last_trained_safra()
 
             path = 'registries/pkl_{safra}/'.format(safra=self.train_safra)
@@ -117,7 +121,6 @@ class Scorer():
             pickle_suf = re.findall(r'[0-9]+\.pkl',last_pickle)[0]
             self.train_dt = pickle_suf.replace('.pkl','')
         else:
-            self.train_safra,self.train_dt = self._load_champ_challenger()
             path = 'registries/pkl_{safra}/'.format(safra=self.train_safra)
             last_pickle = self.main_cfg.model_name+'_'+str(self.train_dt)+'.pkl'
             
