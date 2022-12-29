@@ -1,6 +1,6 @@
-model_name: creds-toy-regression
+model_name: opf-ccred-pote
 type: regression
-train_test_sample: 0.50
+train_test_sample: 0.20
 persist: 'always'
 bins:
   - 0

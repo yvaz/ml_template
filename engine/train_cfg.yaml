@@ -8,7 +8,7 @@ train:
     is_unbalance: "true"
 test_sample_rate: 0.20
 tuning:
-  n_trials: 50
+  n_trials: 10
   direction: minimize
   pred_tuning: predict
   sample_rate: 0.20

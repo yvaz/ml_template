@@ -12,18 +12,18 @@ def gen_target(safra):
     bigquery = BigQuery(
         credentials=credentials
     )    
-    query = """SELECT CUS_CUST_ID, 
-                  CASE WHEN COUNT(1) <= 10 THEN COUNT(1)
-                  ELSE 10 
-                  END target
+    query = """SELECT CUS_CUST_ID,
+                        CASE WHEN COUNT(*) < 10 THEN count(*)
+                        ELSE 10
+                        END target
+                WHERE count(*) > 0
             FROM (
-                SELECT DISTINCT CUS_CUST_ID,CRD_CRED_CARD_UUID,MAX(lmt.LIMIT_AMOUNT) LIMIT_AMOUNT
-                FROM WHOWNER.LK_MP_OPF_DATA_IN_CRED_CARD_ACC_SCDT2
-                CROSS JOIN UNNEST(CRD_ARR_CRED_CARD_LIMITS) lmt
+                SELECT DISTINCT CUS_CUST_ID,CRD_CRED_CARD_UUID
+                FROM  mp-open-finance.BI_OPEN_FINANCE.LK_MP_OPF_DATA_IN_CRED_CARD_ACC_SCDT2
                 WHERE CRD_CRED_CARD_UUID IS NOT NULL
-                GROUP BY 1,2
             )
-            GROUP BY CUS_CUST_ID"""
+            GROUP BY 1
+            """
     
     df = bigquery.execute_response(query,output='df')
     
