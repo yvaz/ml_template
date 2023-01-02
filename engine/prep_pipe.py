@@ -104,7 +104,7 @@ class PrepPipe(BaseEstimator, TransformerMixin):
         meta = [
                   {'feat_dim':list(X.shape)},
                   {'class_proportion':len(y[y == 1])/len(y)},
-                  {'var_names':X.columns.tolist()}
+                  {'var_names':cats + nums}
                 ]
         
         self.metadata.meta_by_list(self.metadata_key,meta)

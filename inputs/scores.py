@@ -31,7 +31,7 @@ def gen_scores(safra):
         SELECT
             DISTINCT cus_cust_id
         FROM
-            WHOWNER.LK_MP_OPF_DATA_IN_DATA_OUT_CONSENT_SCDT2
+            mp-open-finance.BI_OPEN_FINANCE.LK_MP_OPF_DATA_IN_DATA_OUT_CONSENT_SCDT2
         WHERE
             cus_cust_id IS NOT NULL
             AND CNS_CONSENT_TYPE_DETAIL = 'DATA_OUT'

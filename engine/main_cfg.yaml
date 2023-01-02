@@ -3,26 +3,12 @@ labeled: True
 train_test_sample: 0.20
 persist: 'always'
 score:
-  tb_name: meli-bi-data.ML_TBL.TB_PROPENSITY_SCORES
+  tb_name: score.parquet
   persist_method: 
-    package: io_ml.io_bq
-    module: IO_BQ
+    package: io_ml.io_parquet
+    module: IOParquet
 eval:
-  tb_name: meli-bi-data.ML_TBL.TB_PROP_DECIL_EVAL
+  tb_name: eval.parquet
   persist_method: 
-    package: io_ml.io_bq
-    module: IO_BQ
-prod:
-  package: io_ml.io_s3
-  module: IO_S3
-  params:
-    acc_key_name: SECRET_SECRET_S3_ACCESS_KEY
-    sec_key_name: SECRET_SECRET_S3_SECRET_KEY
-    remote_path: prod/meliextra/modelo/opf/
-    bucket: analytics.data.ml
-champ_challenger:
-  tolerance_champ: 3
-  tb_name: meli-bi-data.ML_TBL.TB_CHAMP_CHALLENGER
-  persist_method: 
-    package: io_ml.io_bq
-    module: IO_BQ
+    package: io_ml.io_parquet
+    module: IOParquet
